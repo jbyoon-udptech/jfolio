@@ -1,13 +1,12 @@
-import Link from "next/link";
+import { AssetForm } from "@/components/AssetForm";
+import { AssetRow } from "@/components/AssetRow";
 import { ApiErrorNotice } from "@/components/Notice";
 import { api, safe } from "@/lib/api";
-import { formatDateTime, formatPrice } from "@/lib/format";
+import { ASSET_TYPES } from "@/lib/instrument";
 
 export const dynamic = "force-dynamic";
 
-const ASSET_TYPES = ["STOCK", "ETF", "CRYPTO", "FX", "BOND", "COMMODITY", "CASH"];
-
-/** Asset master list with search and asset-type filter. */
+/** UI-003: asset master list with search, filtering and inline CRUD. */
 export default async function AssetsPage({
   searchParams,
 }: {
@@ -24,7 +23,12 @@ export default async function AssetsPage({
   return (
     <>
       <h1 className="page-title">자산 목록</h1>
-      <p className="page-sub">등록된 자산 마스터를 조회하고 상세 화면으로 이동합니다.</p>
+      <p className="page-sub">
+        등록된 자산 마스터를 조회하고 등록·수정·비활성화합니다. 삭제는 이력을 보존하는
+        비활성화(`isActive=false`)로 처리됩니다.
+      </p>
+
+      <AssetForm />
 
       <form className="card" method="get" style={{ marginBottom: 16 }}>
         <div className="toolbar" style={{ marginBottom: 0 }}>
@@ -65,28 +69,12 @@ export default async function AssetsPage({
                 <th className="num">현재가</th>
                 <th>시세 시각</th>
                 <th>공급자</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody>
               {items.map((instrument) => (
-                <tr key={instrument.instrumentId}>
-                  <td>
-                    <Link href={`/assets/${instrument.instrumentId}`}>{instrument.name}</Link>
-                  </td>
-                  <td>{instrument.symbol}</td>
-                  <td>{instrument.assetType}</td>
-                  <td>{instrument.market}</td>
-                  <td>{instrument.currency}</td>
-                  <td className="num">
-                    {instrument.latestQuote
-                      ? formatPrice(instrument.latestQuote.price, instrument.latestQuote.currency)
-                      : "—"}
-                  </td>
-                  <td className="muted">{formatDateTime(instrument.latestQuote?.timestamp)}</td>
-                  <td className="muted">
-                    {instrument.providers.map((p) => p.providerId).join(", ") || "—"}
-                  </td>
-                </tr>
+                <AssetRow key={instrument.instrumentId} instrument={instrument} />
               ))}
             </tbody>
           </table>

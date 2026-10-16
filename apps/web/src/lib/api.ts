@@ -121,6 +121,10 @@ export const api = {
 
 /** Server-only write operations, used by the Next.js route handlers. */
 export const mutate = {
+  createPortfolio: (body: unknown) =>
+    request<Portfolio>("/portfolios", { method: "POST", body: JSON.stringify(body) }),
+  updatePortfolio: (id: string, body: unknown) =>
+    request<Portfolio>(`/portfolios/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   createSignalRule: (body: unknown) =>
     request<SignalRule>("/signals/rules", { method: "POST", body: JSON.stringify(body) }),
   updateSignalRule: (id: string, body: unknown) =>
@@ -131,6 +135,18 @@ export const mutate = {
     }),
   createTransaction: (body: unknown) =>
     request<Transaction>("/transactions", { method: "POST", body: JSON.stringify(body) }),
+  updateTransaction: (id: string, body: unknown) =>
+    request<Transaction>(`/transactions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTransaction: (id: string) =>
+    request<void>(`/transactions/${id}`, { method: "DELETE" }),
+  createInstrument: (body: unknown) =>
+    request<Instrument>("/assets", { method: "POST", body: JSON.stringify(body) }),
+  updateInstrument: (id: string, body: unknown) =>
+    request<Instrument>(`/assets/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deactivateInstrument: (id: string) =>
+    request<{ deactivated: boolean; instrument: Instrument }>(`/assets/${id}`, {
+      method: "DELETE",
+    }),
   runCollection: (body: unknown) =>
     request<unknown>("/system/collection/run", { method: "POST", body: JSON.stringify(body) }),
 };

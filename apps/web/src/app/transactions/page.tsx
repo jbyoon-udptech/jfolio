@@ -1,11 +1,12 @@
 import { ApiErrorNotice } from "@/components/Notice";
+import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { TransactionForm, type Option } from "@/components/TransactionForm";
+import { TransactionRow } from "@/components/TransactionRow";
 import { api, safe } from "@/lib/api";
-import { formatCurrency, formatDateTime, formatPrice, formatQuantity } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-/** FR-033: transaction ledger with a creation form. */
+/** FR-033: transaction ledger with create, edit and delete. */
 export default async function TransactionsPage({
   searchParams,
 }: {
@@ -30,6 +31,7 @@ export default async function TransactionsPage({
   const portfolios = portfoliosResult.data?.items ?? [];
   const instruments = instrumentsResult.data?.items ?? [];
   const transactions = transactionsResult.data.items;
+  const currentPortfolioId = searchParams.portfolioId ?? "";
 
   const portfolioOptions: Option[] = portfolios.map((p) => ({
     value: p.portfolioId,
@@ -42,13 +44,34 @@ export default async function TransactionsPage({
 
   return (
     <>
-      <h1 className="page-title">거래 내역</h1>
-      <p className="page-sub">
-        매수/매도, 입출금, 배당 등 모든 자산 변동을 기록합니다. 총 {transactionsResult.data.total}건.
-      </p>
+      <div className="toolbar" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h1 className="page-title">거래 내역</h1>
+          <p className="page-sub">
+            매수/매도, 입출금, 배당 등 모든 자산 변동을 기록합니다. 총{" "}
+            {transactionsResult.data.total}건. 각 행에서 수정·삭제할 수 있습니다.
+          </p>
+        </div>
+        {portfolioOptions.length > 0 ? (
+          <PortfolioSelect
+            portfolios={portfolioOptions}
+            currentId={currentPortfolioId}
+            allOptionLabel="전체 포트폴리오"
+            extraQuery={
+              searchParams.instrumentId
+                ? `instrumentId=${encodeURIComponent(searchParams.instrumentId)}`
+                : undefined
+            }
+          />
+        ) : null}
+      </div>
 
       {portfolioOptions.length > 0 && instrumentOptions.length > 0 ? (
-        <TransactionForm portfolios={portfolioOptions} instruments={instrumentOptions} />
+        <TransactionForm
+          portfolios={portfolioOptions}
+          instruments={instrumentOptions}
+          defaultPortfolioId={searchParams.portfolioId}
+        />
       ) : (
         <div className="notice" style={{ marginBottom: 16 }}>
           거래를 등록하려면 포트폴리오와 자산이 먼저 필요합니다. (시드 데이터를 실행하세요.)
@@ -69,27 +92,18 @@ export default async function TransactionsPage({
                 <th className="num">단가</th>
                 <th className="num">수수료</th>
                 <th>메모</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody>
               {transactions.map((tx) => {
                 const instrument = instruments.find((i) => i.instrumentId === tx.instrumentId);
                 return (
-                  <tr key={tx.transactionId}>
-                    <td className="muted">{formatDateTime(tx.timestamp)}</td>
-                    <td>{tx.type}</td>
-                    <td>
-                      {instrument ? (
-                        <a href={`/assets/${tx.instrumentId}`}>{instrument.symbol}</a>
-                      ) : (
-                        tx.instrumentId
-                      )}
-                    </td>
-                    <td className="num">{formatQuantity(tx.quantity)}</td>
-                    <td className="num">{formatPrice(tx.price, tx.currency)}</td>
-                    <td className="num">{formatCurrency(tx.fee, tx.feeCurrency ?? tx.currency)}</td>
-                    <td className="muted">{tx.memo ?? "—"}</td>
-                  </tr>
+                  <TransactionRow
+                    key={tx.transactionId}
+                    transaction={tx}
+                    symbol={instrument?.symbol}
+                  />
                 );
               })}
             </tbody>

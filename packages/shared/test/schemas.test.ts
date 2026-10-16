@@ -6,6 +6,8 @@ import {
   currencyCode,
   roundCurrency,
   roundTo,
+  updateInstrumentSchema,
+  updatePortfolioSchema,
   updateSignalRuleSchema,
 } from "../src/index";
 
@@ -76,6 +78,24 @@ describe("shared Zod schemas", () => {
   it("validates update patches independently", () => {
     const patch = updateSignalRuleSchema.parse({ isEnabled: false, cooldownSeconds: 60 });
     expect(patch).toEqual({ isEnabled: false, cooldownSeconds: 60 });
+  });
+
+  it("validates portfolio update patches and rejects empty ones", () => {
+    expect(updatePortfolioSchema.parse({ name: "Renamed" })).toEqual({ name: "Renamed" });
+    expect(updatePortfolioSchema.parse({ baseCurrency: "USD", isDefault: true })).toEqual({
+      baseCurrency: "USD",
+      isDefault: true,
+    });
+    expect(() => updatePortfolioSchema.parse({})).toThrow();
+    expect(() => updatePortfolioSchema.parse({ baseCurrency: "usd" })).toThrow();
+  });
+
+  it("validates instrument update patches and rejects empty ones", () => {
+    expect(updateInstrumentSchema.parse({ name: "Renamed" })).toEqual({ name: "Renamed" });
+    expect(updateInstrumentSchema.parse({ isWatchlist: true })).toEqual({ isWatchlist: true });
+    expect(updateInstrumentSchema.parse({ isActive: false })).toEqual({ isActive: false });
+    expect(() => updateInstrumentSchema.parse({})).toThrow();
+    expect(() => updateInstrumentSchema.parse({ assetType: "NOT_A_TYPE" })).toThrow();
   });
 
   it("parses query-string booleans safely", () => {

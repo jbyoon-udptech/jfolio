@@ -18,7 +18,11 @@ export const createInstrumentSchema = z.object({
 });
 export type CreateInstrumentDto = z.infer<typeof createInstrumentSchema>;
 
-export const updateInstrumentSchema = createInstrumentSchema.partial();
+export const updateInstrumentSchema = createInstrumentSchema
+  .partial()
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
+    message: "at least one field is required",
+  });
 export type UpdateInstrumentDto = z.infer<typeof updateInstrumentSchema>;
 
 export const listInstrumentsQuery = z.object({

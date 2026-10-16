@@ -150,6 +150,85 @@ describe("8.3 asset master", () => {
     const { container } = createTestContext();
     expect((await request(appFor(container)).get(`${BASE}/assets/ins_missing`)).status).toBe(404);
   });
+
+  it("partially updates an instrument and preserves untouched fields", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const created = await request(app).post(`${BASE}/assets`).send({
+      symbol: "AAPL",
+      name: "Apple Inc.",
+      assetType: "STOCK",
+      market: "NASDAQ",
+      currency: "USD",
+      providers: [{ providerId: "yahoo", providerSymbol: "AAPL" }],
+    });
+    const id = created.body.instrumentId as string;
+
+    const patched = await request(app)
+      .patch(`${BASE}/assets/${id}`)
+      .send({ name: "Apple Inc. (renamed)", isWatchlist: true });
+    expect(patched.status).toBe(200);
+    expect(patched.body.name).toBe("Apple Inc. (renamed)");
+    expect(patched.body.isWatchlist).toBe(true);
+    // Untouched fields keep their original values.
+    expect(patched.body.symbol).toBe("AAPL");
+    expect(patched.body.market).toBe("NASDAQ");
+    expect(patched.body.currency).toBe("USD");
+    expect(patched.body.isActive).toBe(true);
+    expect(patched.body.providers).toEqual([{ providerId: "yahoo", providerSymbol: "AAPL" }]);
+  });
+
+  it("rejects an empty update patch with 422", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const created = await request(app)
+      .post(`${BASE}/assets`)
+      .send({ symbol: "ZZZ", name: "Z", assetType: "STOCK", market: "KRX", currency: "KRW" });
+    const res = await request(app)
+      .patch(`${BASE}/assets/${created.body.instrumentId}`)
+      .send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects renaming onto an existing natural key with 409", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const base = { assetType: "STOCK", market: "KRX", currency: "KRW" };
+    await request(app).post(`${BASE}/assets`).send({ ...base, symbol: "AAA", name: "A" });
+    const second = await request(app)
+      .post(`${BASE}/assets`)
+      .send({ ...base, symbol: "BBB", name: "B" });
+
+    const clash = await request(app)
+      .patch(`${BASE}/assets/${second.body.instrumentId}`)
+      .send({ symbol: "AAA" });
+    expect(clash.status).toBe(409);
+    expect(clash.body.error.code).toBe("CONFLICT");
+  });
+
+  it("reactivates a soft-deleted instrument via patch", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const created = await request(app)
+      .post(`${BASE}/assets`)
+      .send({ symbol: "CCC", name: "C", assetType: "STOCK", market: "KRX", currency: "KRW" });
+    const id = created.body.instrumentId as string;
+
+    expect((await request(app).delete(`${BASE}/assets/${id}`)).body.instrument.isActive).toBe(false);
+    const restored = await request(app).patch(`${BASE}/assets/${id}`).send({ isActive: true });
+    expect(restored.status).toBe(200);
+    expect(restored.body.isActive).toBe(true);
+  });
+
+  it("returns 404 when patching or deleting a missing instrument", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    expect(
+      (await request(app).patch(`${BASE}/assets/ins_missing`).send({ name: "X" })).status,
+    ).toBe(404);
+    expect((await request(app).delete(`${BASE}/assets/ins_missing`)).status).toBe(404);
+  });
 });
 
 describe("8.4 portfolios", () => {
@@ -172,6 +251,65 @@ describe("8.4 portfolios", () => {
     expect(holdings.body.dataStatus).toBe("NO_DATA");
 
     expect((await request(app).get(`${BASE}/portfolios/pf_missing`)).status).toBe(404);
+  });
+
+  it("updates a portfolio name and base currency", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({ name: "Old", baseCurrency: "KRW" });
+
+    const res = await request(app)
+      .patch(`${BASE}/portfolios/${portfolio.portfolioId}`)
+      .send({ name: "New Name", baseCurrency: "USD" });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("New Name");
+    expect(res.body.baseCurrency).toBe("USD");
+
+    const read = await request(app).get(`${BASE}/portfolios/${portfolio.portfolioId}`);
+    expect(read.body.name).toBe("New Name");
+  });
+
+  it("moves the default flag to another portfolio", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
+    const second = await container.portfolios.create({ name: "Second", baseCurrency: "KRW" });
+    expect(first.isDefault).toBe(true);
+
+    const res = await request(app)
+      .patch(`${BASE}/portfolios/${second.portfolioId}`)
+      .send({ isDefault: true });
+    expect(res.status).toBe(200);
+    expect(res.body.isDefault).toBe(true);
+
+    const list = await request(app).get(`${BASE}/portfolios`);
+    const byId = new Map(
+      (list.body.items as Array<{ portfolioId: string; isDefault: boolean }>).map((p) => [
+        p.portfolioId,
+        p.isDefault,
+      ]),
+    );
+    expect(byId.get(second.portfolioId)).toBe(true);
+    expect(byId.get(first.portfolioId)).toBe(false);
+  });
+
+  it("rejects an empty portfolio patch with 422", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({ name: "P", baseCurrency: "KRW" });
+    const res = await request(app)
+      .patch(`${BASE}/portfolios/${portfolio.portfolioId}`)
+      .send({});
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 404 when patching a missing portfolio", async () => {
+    const { container } = createTestContext();
+    const res = await request(appFor(container))
+      .patch(`${BASE}/portfolios/pf_missing`)
+      .send({ name: "Nope" });
+    expect(res.status).toBe(404);
   });
 
   it("creates an on-demand snapshot and lists it", async () => {
@@ -267,6 +405,47 @@ describe("8.5 transactions", () => {
         quantity: 1,
       });
     expect(res.status).toBe(422);
+  });
+
+  it("preserves untouched fields on a partial update", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+
+    const created = await request(app)
+      .post(`${BASE}/transactions`)
+      .send({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp: FIXED_NOW.toISOString(),
+        quantity: 10,
+        price: 100,
+        fee: 5,
+        memo: "original",
+      });
+    expect(created.status).toBe(201);
+
+    const patched = await request(app)
+      .patch(`${BASE}/transactions/${created.body.transactionId}`)
+      .send({ quantity: 12 });
+
+    expect(patched.status).toBe(200);
+    expect(patched.body.quantity).toBe(12);
+    // A partial update must not reset price/fee via schema defaults.
+    expect(patched.body.price).toBe(100);
+    expect(patched.body.fee).toBe(5);
+    expect(patched.body.memo).toBe("original");
+  });
+
+  it("returns 404 when updating or deleting an unknown transaction", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const patched = await request(app)
+      .patch(`${BASE}/transactions/tx_missing`)
+      .send({ quantity: 1 });
+    expect(patched.status).toBe(404);
+    expect((await request(app).delete(`${BASE}/transactions/tx_missing`)).status).toBe(404);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   formatQuantity,
   formatSignedCurrency,
   formatWeight,
+  toLocalDateTimeInput,
 } from "@/lib/format";
 import { normalizePeriod, periodRange } from "@/lib/period";
 
@@ -69,6 +70,15 @@ describe("UI-006 formatting", () => {
     expect(formatDate("2026-10-16T12:00:00.000Z")).toBe("2026-10-16");
     expect(formatDateTime(null)).toBe(EMPTY);
     expect(formatDateTime("not-a-date")).toBe(EMPTY);
+  });
+
+  it("round-trips an instant through a datetime-local value", () => {
+    const iso = "2026-10-16T12:00:00.000Z";
+    const local = toLocalDateTimeInput(iso);
+    expect(local).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    // Interpreting the value as local time restores the original instant.
+    expect(new Date(local).getTime()).toBe(new Date(iso).getTime());
+    expect(toLocalDateTimeInput("not-a-date")).toBe("");
   });
 });
 

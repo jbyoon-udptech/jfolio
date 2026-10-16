@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toLocalDateTimeInput } from "@/lib/format";
 
 const TRANSACTION_TYPES = [
   "BUY",
@@ -26,9 +27,12 @@ export interface Option {
 export function TransactionForm({
   portfolios,
   instruments,
+  defaultPortfolioId,
 }: {
   portfolios: Option[];
   instruments: Option[];
+  /** Pre-selects a portfolio, e.g. when the ledger is filtered to one. */
+  defaultPortfolioId?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -84,7 +88,11 @@ export function TransactionForm({
       <div className="form-grid">
         <label>
           포트폴리오
-          <select name="portfolioId" required defaultValue={portfolios[0]?.value ?? ""}>
+          <select
+            name="portfolioId"
+            required
+            defaultValue={defaultPortfolioId ?? portfolios[0]?.value ?? ""}
+          >
             {portfolios.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -149,7 +157,5 @@ export function TransactionForm({
 
 /** `YYYY-MM-DDTHH:mm` in local time, suitable for `datetime-local`. */
 function localNow(): string {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+  return toLocalDateTimeInput(new Date());
 }

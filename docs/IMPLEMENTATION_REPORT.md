@@ -23,10 +23,10 @@
 
 | 항목 | 결과 |
 | --- | --- |
-| `yarn test` | **79 tests / 8 files, 전부 통과** |
+| `yarn test` | **97 tests / 9 files, 전부 통과** |
 | `yarn typecheck` | 통과 (shared + api + web) |
 | `yarn lint` | 통과 |
-| `yarn build` | 통과 (API tsup, Web next build 13 routes) |
+| `yarn build` | 통과 (API tsup, Web next build 19 routes) |
 | 라이브 E2E | `/health`, `/api/v1/dashboard`, `/system/*` 실제 데이터 반환 |
 
 ---
@@ -79,9 +79,9 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 
 | ID | 항목 | 상태 | 구현/근거 |
 | --- | --- | --- | --- |
-| FR-001 | 금융자산 등록/관리 | ✅ | `InstrumentService`, `/assets` CRUD, `api.test.ts` |
+| FR-001 | 금융자산 등록/관리 | ✅ | `InstrumentService`, `/assets` CRUD + 등록/인라인 수정/비활성화 UI, `api.test.ts` |
 | FR-002 | 종목 식별자 분리 | ✅ | `instrumentId` + `symbol/market/currency` + `providers[]` |
-| FR-003 | 관심 종목 관리 | ◐ | `isWatchlist` 필드 + 목록 필터 지원, 전용 토글 UI 없음 |
+| FR-003 | 관심 종목 관리 | ✅ | `isWatchlist` 필드 + 목록 필터 + 자산 등록/수정 폼의 관심종목 토글 |
 | FR-010 | 공급자 인터페이스 | ✅ | `providers/market-data.provider.ts` |
 | FR-011 | 공급자 독립성 | ✅ | 레지스트리 + 정규화. `providers.test.ts` |
 | FR-012 | 수집 주기 | ✅ | 자산군별 스케줄러(`scheduler/`) |
@@ -90,11 +90,11 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 | FR-020 | 시세 저장 | ✅ | `market_quotes`, `latest_quotes` |
 | FR-021 | 시계열 보존 | ✅ | `getHistorical`, `/assets/:id/quotes` |
 | FR-022 | 저장 전략 | ✅ | 최신 업서트 + 논리키 중복 제거. T-008 |
-| FR-030 | 포트폴리오 생성 | ✅ | `PortfolioService.ensureDefault` |
+| FR-030 | 포트폴리오 생성 | ✅ | `PortfolioService`, `POST`/`PATCH /portfolios`, `/portfolios` 관리 화면 |
 | FR-031 | 보유 현황 | ✅ | `PositionService` (원장에서 파생) |
-| FR-032 | 거래 이력 | ✅ | `TransactionService`, `/transactions` |
+| FR-032 | 거래 이력 | ✅ | `TransactionService`, `/transactions` (등록·수정·삭제) |
 | FR-033 | 과거 현황 복원 | ✅ | `asOf` 평가, `historySeries`. H-001/H-002 |
-| FR-034 | 거래 수정/삭제 재계산 | ✅ | 삭제 + 스냅샷 무효화. T-007 |
+| FR-034 | 거래 수정/삭제 재계산 | ✅ | `PATCH`/`DELETE` + 스냅샷 무효화, `/transactions` 행별 편집 UI. T-007 |
 | FR-040 | 기준 통화 설정 | ✅ | `BASE_CURRENCY`, 포트폴리오별 `baseCurrency` |
 | FR-041 | 개별 자산 평가 | ✅ | `ValuationService`. T-001 |
 | FR-042 | 기준 통화 환산 | ✅ | `getFxRate` direct→inverse→peg. T-003 |
@@ -122,6 +122,9 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 | UI-004 | 과거 자산 현황 (`/history`) | ✅ |
 | UI-005 | 시그널 관리 (`/signals`) | ✅ |
 | UI-006 | 공통 상태 표시 | ✅ `StatusBadge`, `format.ts`, UNAVAILABLE≠0 |
+| (추가) | 자산 마스터 관리 (`/assets`) | ✅ 자산 등록 폼 + 행별 인라인 수정·비활성화·복원, 검색/유형 필터 |
+| (추가) | 포트폴리오 관리 (`/portfolios`) | ✅ 생성·이름/통화 수정·기본 지정, 대시보드/보유자산 포트폴리오 선택 |
+| (추가) | 거래(자산 내역) 편집 (`/transactions`) | ✅ 행별 인라인 수정·삭제, 포트폴리오 필터, 보유자산/포트폴리오에서 바로가기 |
 
 ### 4.3 비기능 요구사항 (NFR)
 
@@ -147,11 +150,11 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 ## 5. 테스트 결과 (실제 실행)
 
 ```
-packages/shared   Test Files 1 passed   Tests 9 passed
-apps/api          Test Files 6 passed   Tests 60 passed
-apps/web          Test Files 1 passed   Tests 10 passed
+packages/shared   Test Files 1 passed   Tests 11 passed
+apps/api          Test Files 6 passed   Tests 71 passed
+apps/web          Test Files 2 passed   Tests 15 passed
 --------------------------------------------------------
-합계              8 files               79 tests passed
+합계              9 files               97 tests passed
 ```
 
 API 테스트 파일별 구성:
@@ -161,9 +164,16 @@ API 테스트 파일별 구성:
 | `financial.test.ts` | 10 | 평가금액/손익/환산/이동평균/분할수량 (T-001~T-008) |
 | `signals.test.ts` | 8 | 임계/전이/쿨다운/비활성/잘못된 값 (T-101~T-107) |
 | `history.test.ts` | 8 | `asOf` 거래, 과거 환율, 스냅샷 멱등/재계산 일치, 누락 구간 UNAVAILABLE, 시간대 경계 |
-| `api.test.ts` | 24 | 인증, 검증(422), CRUD, 대시보드, 오류 envelope |
+| `api.test.ts` | 35 | 인증, 검증(422), 자산 CRUD(부분 수정/409/404/복원), 거래 수정/삭제, 포트폴리오 생성/수정, 대시보드, 오류 envelope |
 | `providers.test.ts` | 3 | Frankfurter URL 구성/관용 처리 |
 | `fx.test.ts` | 7 | 환율 direct/inverse/스테이블코인 페그 |
+
+웹 테스트 파일별 구성:
+
+| 파일 | 테스트 | 검증 내용 |
+| --- | --- | --- |
+| `format.test.ts` | 11 | 통화/수량/날짜 포맷, UNAVAILABLE≠0, 로컬 datetime 변환 |
+| `instrument.test.ts` | 4 | 공급자 링크 텍스트 파싱/직렬화 및 잘못된 형식 거부 |
 
 추가로 `yarn typecheck`, `yarn lint`, `yarn build` 모두 통과했습니다.
 
@@ -202,6 +212,9 @@ API 테스트 파일별 구성:
 7. **스냅샷 경계**: 매시 정각(UTC hour) + `APP_TIMEZONE` 기준 로컬 자정.
 8. **인증**: `API_AUTH_TOKEN` 설정 시에만 활성화, health는 예외.
 9. **일별 변동**: 현재/24h 기준 평가금액 중 하나라도 UNAVAILABLE이면 `null`.
+10. **자산 삭제 = 비활성화**: 거래·시세·스냅샷이 참조하는 자산은 물리 삭제하지
+    않고 `isActive=false`로 비활성화하며 같은 행에서 복원할 수 있습니다. 자연키
+    (`symbol`+`market`+`currency`)는 수정 시에도 유일성을 유지합니다.
 
 ### 열린 결정 (후속)
 
@@ -250,7 +263,6 @@ AAPL(30주), 005930(100주). 각 포지션에 가격·환율·평가금액·손�
 
 - 인증은 단일 공유 토큰 기반(사용자별 권한/멀티테넌시 없음).
 - 실현손익/배당/이자는 계산되지만 API·UI에 노출되지 않음 (FR-046 부분).
-- 관심종목은 데이터/필터만 있고 전용 UI 토글이 없음 (FR-003 부분).
 - NFR-001(응답 시간)은 정식 부하/지연 벤치마크를 수행하지 않음.
 - BOND/COMMODITY는 타입만 정의, 기본 공급자 없음.
 - 과거 구간에 시세가 없으면 해당 시점은 `UNAVAILABLE`/`NO_DATA` 로 표시(0 아님).
@@ -260,7 +272,7 @@ AAPL(30주), 005930(100주). 각 포지션에 가격·환율·평가금액·손�
 ## 11. 산출물 목록
 
 - 코드: `packages/shared`, `apps/api`, `apps/web`
-- 테스트: 위 5장 (79 tests)
+- 테스트: 위 5장 (97 tests)
 - 문서: `README.md`, `docs/API.md`, `docs/DATA_MODEL.md`,
   `docs/DEVELOPMENT.md`, `docs/IMPLEMENTATION_REPORT.md`, `docs/SPEC.md`
 - 운영: `yarn seed`, `yarn collect:once`, `/api/v1/system/*`

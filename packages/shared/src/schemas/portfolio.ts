@@ -8,6 +8,21 @@ export const createPortfolioSchema = z.object({
 });
 export type CreatePortfolioDto = z.infer<typeof createPortfolioSchema>;
 
+/**
+ * FR-030: partial update. At least one mutable field must be present so an
+ * empty PATCH is rejected instead of silently succeeding.
+ */
+export const updatePortfolioSchema = z
+  .object({
+    name: z.string().trim().min(1).max(128).optional(),
+    baseCurrency: currencyCode.optional(),
+    isDefault: z.boolean().optional(),
+  })
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
+    message: "at least one of name, baseCurrency or isDefault is required",
+  });
+export type UpdatePortfolioDto = z.infer<typeof updatePortfolioSchema>;
+
 export const createTransactionSchema = z.object({
   portfolioId: z.string().min(1),
   instrumentId: z.string().min(1),

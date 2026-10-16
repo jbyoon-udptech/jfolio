@@ -1,6 +1,8 @@
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
+import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 
@@ -19,11 +21,18 @@ export default async function PortfolioPage({
     return <ApiErrorNotice error={dashboardResult.error} />;
   }
   const portfolioId = dashboardResult.data.portfolioId;
-  const holdingsResult = await safe(() => api.holdings(portfolioId));
+  const [holdingsResult, portfoliosResult] = await Promise.all([
+    safe(() => api.holdings(portfolioId)),
+    safe(() => api.portfolios()),
+  ]);
   if (!holdingsResult.data) {
     return <ApiErrorNotice error={holdingsResult.error} />;
   }
   const holdings = holdingsResult.data;
+  const portfolioOptions: Option[] = (portfoliosResult.data?.items ?? []).map((p) => ({
+    value: p.portfolioId,
+    label: `${p.name} (${p.baseCurrency})`,
+  }));
   const total = holdings.items.reduce(
     (sum, p) => sum + (p.marketValueBase ?? 0),
     0,
@@ -38,7 +47,15 @@ export default async function PortfolioPage({
             {holdings.baseCurrency} 기준 · {formatDateTime(holdings.asOf)}
           </p>
         </div>
-        <StatusBadge status={holdings.dataStatus} />
+        <div className="toolbar" style={{ marginBottom: 0, gap: 12 }}>
+          {portfolioOptions.length > 0 ? (
+            <PortfolioSelect portfolios={portfolioOptions} currentId={portfolioId} />
+          ) : null}
+          <a className="btn" href={`/transactions?portfolioId=${portfolioId}`}>
+            거래 내역 편집
+          </a>
+          <StatusBadge status={holdings.dataStatus} />
+        </div>
       </div>
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>

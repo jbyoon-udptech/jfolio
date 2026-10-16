@@ -103,6 +103,12 @@ Query:
 `assetType` 값: `STOCK | ETF | CRYPTO | FX | BOND | COMMODITY | CASH`.
 `interval` 값: `tick | 10s | 1m | 5m | 1h | 1d`.
 
+`PATCH /assets/:id` 는 부분 수정입니다. 보내지 않은 필드는 기존 값을 유지하며,
+빈 본문(`{}`)은 `422` 로 거부됩니다. 자연키(`symbol`+`market`+`currency`)가
+다른 자산과 겹치면 `409` 를 반환합니다. `DELETE` 는 거래·시세 이력 보존을 위해
+물리 삭제 대신 `isActive=false` 로 비활성화하며, `PATCH { "isActive": true }` 로
+복원할 수 있습니다.
+
 ---
 
 ## 3. Portfolios
@@ -112,11 +118,17 @@ Query:
 | GET | `/api/v1/portfolios` | 포트폴리오 목록 |
 | POST | `/api/v1/portfolios` | 포트폴리오 생성 |
 | GET | `/api/v1/portfolios/:id` | 포트폴리오 상세 |
+| PATCH | `/api/v1/portfolios/:id` | 포트폴리오 수정 (`name`, `baseCurrency`, `isDefault`) |
 | GET | `/api/v1/portfolios/:id/holdings` | 보유 자산 평가 |
 | GET | `/api/v1/portfolios/:id/valuation` | 평가금액 (`asOf`, `baseCurrency`) |
 | GET | `/api/v1/portfolios/:id/history` | 과거 평가 시계열 (`from`, `to`, `interval`) |
 | GET | `/api/v1/portfolios/:id/snapshots` | 스냅샷 조회 (`snapshotType`, `from`, `to`, `limit`) |
 | POST | `/api/v1/portfolios/:id/snapshots` | 온디맨드 스냅샷 생성 (`snapshotType`, `asOf`, `baseCurrency`) |
+
+`PATCH /portfolios/:id` 는 `name` / `baseCurrency` / `isDefault` 중 **하나 이상**을
+받습니다. 빈 본문은 `422` 로 거부되며, `isDefault: true` 로 지정하면 같은 사용자의
+다른 포트폴리오는 자동으로 기본 지정이 해제됩니다. 생성·수정 UI는 웹의
+`/portfolios` 화면에서 제공됩니다.
 
 `/holdings` 응답에는 각 포지션의 `price`, `fxRateToBase`, `marketValueBase`,
 `unrealizedPnL`, `status`, `statusReason` 이 포함됩니다. 가격/환율을 해석할 수
@@ -155,6 +167,13 @@ Query:
 DIVIDEND | INTEREST | FEE | SPLIT | ADJUSTMENT`. `currency` 는 선택이며
 생략 시 상품 통화로 해석됩니다. 거래 생성/수정/삭제는 이후 스냅샷을
 무효화하고 포지션을 원장에서 재계산합니다 (FR-034).
+
+`PATCH /transactions/:id` 는 **부분 수정**입니다. 전달한 필드만 변경되며
+(예: `{"quantity": 12}` 는 수량만 바꾸고 `price`/`fee`/`memo` 는 유지),
+존재하지 않는 거래는 `404` 를 반환합니다. 대시보드의 `/transactions`
+화면에서 각 행의 `수정`/`삭제` 로 동일한 동작을 수행할 수 있습니다.
+거래의 `portfolioId`/`instrumentId` 변경은 통화 정합성 문제로 UI 에서는
+제공하지 않습니다(잘못된 자산은 삭제 후 재등록).
 
 ---
 

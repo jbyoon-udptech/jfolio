@@ -2,7 +2,9 @@ import Link from "next/link";
 import { AllocationList } from "@/components/AllocationList";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
+import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import {
   formatCurrency,
@@ -40,6 +42,12 @@ export default async function DashboardPage({
   );
   const points = historyResult.data?.items ?? [];
 
+  const portfoliosResult = await safe(() => api.portfolios());
+  const portfolioOptions: Option[] = (portfoliosResult.data?.items ?? []).map((p) => ({
+    value: p.portfolioId,
+    label: `${p.name} (${p.baseCurrency})`,
+  }));
+
   return (
     <>
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
@@ -49,7 +57,16 @@ export default async function DashboardPage({
             기준 통화 {currency} · 기준 시각 {formatDateTime(dashboard.asOf)}
           </p>
         </div>
-        <StatusBadge status={dashboard.dataStatus} />
+        <div className="toolbar" style={{ marginBottom: 0, gap: 12 }}>
+          {portfolioOptions.length > 0 ? (
+            <PortfolioSelect
+              portfolios={portfolioOptions}
+              currentId={dashboard.portfolioId}
+              extraQuery={searchParams.period ? `period=${searchParams.period}` : undefined}
+            />
+          ) : null}
+          <StatusBadge status={dashboard.dataStatus} />
+        </div>
       </div>
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>

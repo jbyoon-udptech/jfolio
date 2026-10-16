@@ -113,6 +113,18 @@ export function formatDate(value: string | Date | null | undefined): string {
   }).format(date);
 }
 
+/**
+ * Format an instant as a `datetime-local` input value (`YYYY-MM-DDTHH:mm`) in
+ * the browser's local time. `new Date(value)` round-trips to the same instant,
+ * so edit forms can safely submit `new Date(value).toISOString()`.
+ */
+export function toLocalDateTimeInput(value: string | Date): string {
+  const date = toDate(value);
+  if (!date) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 /** Percentage-point weight, e.g. 0.72 => "0.72%". */
 export function formatWeight(value: number | null | undefined): string {
   if (!isFiniteNumber(value)) return EMPTY;

@@ -3,6 +3,7 @@ import {
   createPortfolioSchema,
   historyQuery,
   snapshotTypeSchema,
+  updatePortfolioSchema,
   valuationQuery,
 } from "@jfolio/shared";
 import { z } from "zod";
@@ -50,6 +51,19 @@ export function createPortfoliosRouter(container: Container): Router {
     asyncHandler(async (req, res) => {
       const id = pathParam(req, "id");
       const portfolio = await container.portfolios.get(id);
+      if (!portfolio) throw notFound(`Portfolio ${id} not found`);
+      res.json(portfolio);
+    }),
+  );
+
+  // FR-030: rename, re-base or change the default portfolio.
+  router.patch(
+    "/:id",
+    asyncHandler(async (req, res) => {
+      const id = pathParam(req, "id");
+      await requirePortfolio(container, id);
+      const body = parseBody(updatePortfolioSchema, req.body);
+      const portfolio = await container.portfolios.update(id, body);
       if (!portfolio) throw notFound(`Portfolio ${id} not found`);
       res.json(portfolio);
     }),

@@ -265,6 +265,20 @@ button:disabled {
   cursor: not-allowed;
 }
 
+a.btn {
+  display: inline-block;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.btn:hover {
+  border-color: var(--accent);
+}
+
 .notice {
   padding: 12px 14px;
   border-radius: var(--radius);
