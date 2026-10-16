@@ -49,6 +49,10 @@ MongoDB native driver 사용. 컬렉션 정의는
 - `timestamp` = 가격의 기준 시각, `receivedAt` = 서버 저장 시각 (혼동 금지)
 - `interval`: `tick | 10s | 1m | 5m | 1h | 1d`
 - 논리 중복 키: `(instrumentId, providerId, interval, timestamp)`
+- `latest_quotes` 는 종목별 물질화 뷰입니다. 수집 시 매 관측마다 갱신되며(동일
+  시각 중복이면 `receivedAt` 만 갱신), 저장된 `timestamp` 보다 오래된 시세는
+  반영하지 않아 최신값이 뒤로 가지 않습니다. 목록/상세 API가 `latestQuote` 로
+  함께 반환합니다.
 
 ### FxRate
 

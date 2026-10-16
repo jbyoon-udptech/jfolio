@@ -118,14 +118,19 @@ export class MemoryQuoteRepository implements QuoteRepository {
 
   async insertQuote(quote: MarketQuote): Promise<boolean> {
     const key = this.key(quote);
-    if (this.keys.has(key)) return false;
-    this.keys.add(key);
-    this.quotes.push(clone(quote));
+    const isNew = !this.keys.has(key);
+    if (isNew) {
+      this.keys.add(key);
+      this.quotes.push(clone(quote));
+    }
+    // Refresh the materialised latest quote on every observation (mirrors the
+    // Mongo repository), keeping the newest timestamp so a late-arriving older
+    // quote cannot regress it.
     const current = this.latest.get(quote.instrumentId);
     if (!current || quote.timestamp.getTime() >= current.timestamp.getTime()) {
       this.latest.set(quote.instrumentId, { ...clone(quote) });
     }
-    return true;
+    return isNew;
   }
 
   async insertQuotes(quotes: MarketQuote[]): Promise<{ inserted: number; duplicates: number }> {

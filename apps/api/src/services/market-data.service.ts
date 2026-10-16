@@ -140,6 +140,11 @@ export class MarketDataService {
     return this.repos.quotes.getLatest(instrumentId);
   }
 
+  /** Batch lookup of materialised latest quotes, keyed by instrumentId. */
+  async getLatestMany(instrumentIds: string[]): Promise<Map<string, LatestQuote>> {
+    return this.repos.quotes.getLatestMany(instrumentIds);
+  }
+
   async getHistorical(instrumentId: string, query: HistoricalQuery = {}): Promise<MarketQuote[]> {
     return this.repos.quotes.getHistorical(instrumentId, query);
   }

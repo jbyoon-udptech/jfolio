@@ -80,7 +80,7 @@ Query:
 
 | Method | Endpoint | 설명 |
 | --- | --- | --- |
-| GET | `/api/v1/assets` | 자산 목록 (`assetType`, `market`, `currency`, `search`, `isActive`, `limit`, `offset`) |
+| GET | `/api/v1/assets` | 자산 목록 + 각 항목의 `latestQuote` (`assetType`, `market`, `currency`, `search`, `isActive`, `limit`, `offset`) |
 | POST | `/api/v1/assets` | 자산 등록 |
 | GET | `/api/v1/assets/:id` | 자산 상세 + `latestQuote` |
 | PATCH | `/api/v1/assets/:id` | 자산 정보 수정 |
@@ -108,6 +108,18 @@ Query:
 다른 자산과 겹치면 `409` 를 반환합니다. `DELETE` 는 거래·시세 이력 보존을 위해
 물리 삭제 대신 `isActive=false` 로 비활성화하며, `PATCH { "isActive": true }` 로
 복원할 수 있습니다.
+
+> **최신 시세(`latestQuote`)**: `GET /assets` 목록과 `GET /assets/:id` 상세는 자산별
+> 최신 시세를 `latestQuote` 필드로 함께 반환합니다(시세가 없으면 `null`). 값은
+> `latest_quotes` 컬렉션에 저장된 최신 관측치이며, 수집 실행 시 매 관측마다
+> 갱신됩니다(동일 시각의 중복 관측도 `receivedAt` 이 갱신됨). 저장된 최신값보다
+> 오래된 시세가 뒤늦게 들어와도 최신값을 덮어쓰지 않습니다.
+
+> **한국 종목 Yahoo 심볼**: `market` 이 `KRX`/`KOSPI`/`KOSDAQ` 이고 `symbol` 이
+> 6자리 숫자이면 Yahoo 공급자가 조회 시 접미사(`.KS`/`.KQ`)를 자동으로 붙입니다.
+> `providers[].providerSymbol` 에 접미사를 직접 지정하면 그 값이 우선합니다.
+> `KRX` 는 KOSPI/KOSDAQ 을 구분하지 못하므로 두 후보를 순서대로 시도하고,
+> 돌려받은 `instrumentType` 이 자산 유형과 맞지 않으면 다음 후보를 사용합니다.
 
 ---
 

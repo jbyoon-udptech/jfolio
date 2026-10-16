@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Nav } from "@/components/Nav";
+import { cookies } from "next/headers";
+import { Sidebar } from "@/components/Sidebar";
+import { SIDEBAR_COOKIE, parseSidebarState } from "@/lib/sidebar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,17 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const collapsed =
+    parseSidebarState(cookies().get(SIDEBAR_COOKIE)?.value) === "collapsed";
   return (
     <html lang="ko">
       <body>
         <div className="layout">
-          <aside className="sidebar">
-            <h1 className="brand">jFolio</h1>
-            <p className="brand-sub">통합 자산 관리</p>
-            <nav className="nav">
-              <Nav />
-            </nav>
-          </aside>
+          <Sidebar defaultCollapsed={collapsed} />
           <main className="main">{children}</main>
         </div>
       </body>

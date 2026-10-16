@@ -229,6 +229,87 @@ describe("8.3 asset master", () => {
     ).toBe(404);
     expect((await request(app).delete(`${BASE}/assets/ins_missing`)).status).toBe(404);
   });
+
+  it("includes the latest quote in the asset list", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const priced = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    await createInstrument(container, {
+      symbol: "BBB",
+      name: "Asset B",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    await container.marketData.storeQuote(priced, makeQuote(priced, 1234));
+
+    const list = await request(app).get(`${BASE}/assets`);
+    expect(list.status).toBe(200);
+    const bySymbol = new Map(
+      (list.body.items as Array<{ symbol: string; latestQuote: { price: number } | null }>).map(
+        (item) => [item.symbol, item.latestQuote] as const,
+      ),
+    );
+    expect(bySymbol.get("AAA")?.price).toBe(1234);
+    expect(bySymbol.get("BBB")).toBeNull();
+  });
+});
+
+describe("FR-020 latest quote materialisation", () => {
+  it("refreshes the latest quote even when the raw quote is a duplicate", async () => {
+    const { container } = createTestContext();
+    const instrument = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+
+    const first = await container.marketData.storeQuote(instrument, makeQuote(instrument, 100));
+    expect(first.stored).toBe(true);
+    const second = await container.marketData.storeQuote(instrument, makeQuote(instrument, 100));
+    expect(second.duplicate).toBe(true);
+
+    const latest = await container.marketData.getLatest(instrument.instrumentId);
+    expect(latest?.price).toBe(100);
+  });
+
+  it("does not regress the latest quote when an older quote arrives later", async () => {
+    const { container } = createTestContext();
+    const instrument = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const newer = new Date("2026-10-16T10:00:00.000Z");
+    const older = new Date("2026-10-16T09:00:00.000Z");
+
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 200, { timestamp: newer, interval: "1d" }),
+    );
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 100, { timestamp: older, interval: "1m" }),
+    );
+
+    const latest = await container.marketData.getLatest(instrument.instrumentId);
+    expect(latest?.price).toBe(200);
+    expect(latest?.timestamp.toISOString()).toBe(newer.toISOString());
+  });
 });
 
 describe("8.4 portfolios", () => {

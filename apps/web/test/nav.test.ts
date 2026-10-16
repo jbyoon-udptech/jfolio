@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+import { NAV_LINKS, isNavActive } from "@/lib/nav";
+
+describe("sidebar nav active route", () => {
+  it("marks the dashboard active only on the root path", () => {
+    expect(isNavActive("/", "/")).toBe(true);
+    expect(isNavActive("/", "/portfolio")).toBe(false);
+  });
+
+  it("keeps a section active for its detail routes", () => {
+    expect(isNavActive("/assets", "/assets")).toBe(true);
+    expect(isNavActive("/assets", "/assets/ins_123")).toBe(true);
+    expect(isNavActive("/assets", "/assetsx")).toBe(false);
+  });
+
+  it("does not treat /portfolios as /portfolio", () => {
+    expect(isNavActive("/portfolio", "/portfolios")).toBe(false);
+    expect(isNavActive("/portfolios", "/portfolios")).toBe(true);
+  });
+});
+
+describe("sidebar nav model", () => {
+  it("has unique hrefs and a label/icon for every link", () => {
+    const hrefs = NAV_LINKS.map((link) => link.href);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    for (const link of NAV_LINKS) {
+      expect(link.label.length).toBeGreaterThan(0);
+      expect(link.icon.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps the existing destinations", () => {
+    expect(NAV_LINKS.map((link) => link.href)).toEqual([
+      "/",
+      "/portfolio",
+      "/history",
+      "/assets",
+      "/transactions",
+      "/portfolios",
+      "/signals",
+      "/market-data",
+    ]);
+  });
+});

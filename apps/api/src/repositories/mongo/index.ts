@@ -138,14 +138,32 @@ class MongoQuoteRepository implements QuoteRepository {
       { upsert: true },
     );
     const inserted = result.upsertedCount === 1;
-    if (inserted) {
-      await this.latest.updateOne(
-        { instrumentId: quote.instrumentId },
-        { $set: { ...quote } },
-        { upsert: true },
-      );
-    }
+    // Refresh the materialised latest quote on every observation so a repeated
+    // collection run keeps the "latest" view current even when the raw row is a
+    // duplicate. The timestamp guard stops a late-arriving older quote (e.g. a
+    // historical backfill) from regressing the latest value.
+    await this.refreshLatest(quote);
     return inserted;
+  }
+
+  /**
+   * Upsert the materialised latest quote, keeping the newest timestamp. The
+   * unique index on instrumentId guarantees a single document per instrument,
+   * so we first attempt a guarded update and only insert when none exists yet
+   * (a filtered upsert would risk a duplicate-key error when a newer quote is
+   * already stored).
+   */
+  private async refreshLatest(quote: MarketQuote): Promise<void> {
+    const updated = await this.latest.updateOne(
+      { instrumentId: quote.instrumentId, timestamp: { $lte: quote.timestamp } },
+      { $set: { ...quote } },
+    );
+    if (updated.matchedCount > 0) return;
+    await this.latest.updateOne(
+      { instrumentId: quote.instrumentId },
+      { $setOnInsert: { ...quote } },
+      { upsert: true },
+    );
   }
 
   async insertQuotes(quotes: MarketQuote[]): Promise<{ inserted: number; duplicates: number }> {

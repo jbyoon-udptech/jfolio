@@ -23,7 +23,7 @@
 
 | 항목 | 결과 |
 | --- | --- |
-| `yarn test` | **97 tests / 9 files, 전부 통과** |
+| `yarn test` | **118 tests / 10 files, 전부 통과** |
 | `yarn typecheck` | 통과 (shared + api + web) |
 | `yarn lint` | 통과 |
 | `yarn build` | 통과 (API tsup, Web next build 19 routes) |
@@ -125,6 +125,7 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 | (추가) | 자산 마스터 관리 (`/assets`) | ✅ 자산 등록 폼 + 행별 인라인 수정·비활성화·복원, 검색/유형 필터 |
 | (추가) | 포트폴리오 관리 (`/portfolios`) | ✅ 생성·이름/통화 수정·기본 지정, 대시보드/보유자산 포트폴리오 선택 |
 | (추가) | 거래(자산 내역) 편집 (`/transactions`) | ✅ 행별 인라인 수정·삭제, 포트폴리오 필터, 보유자산/포트폴리오에서 바로가기 |
+| (추가) | 좌측 메뉴 접기/펼치기 | ✅ 토글 시 사라지지 않고 **아이콘 레일**로 축소, 아이콘 hover 시 라벨 툴팁, 쿠키로 상태 유지 |
 
 ### 4.3 비기능 요구사항 (NFR)
 
@@ -151,10 +152,10 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 
 ```
 packages/shared   Test Files 1 passed   Tests 11 passed
-apps/api          Test Files 6 passed   Tests 71 passed
-apps/web          Test Files 2 passed   Tests 15 passed
+apps/api          Test Files 6 passed   Tests 84 passed
+apps/web          Test Files 4 passed   Tests 23 passed
 --------------------------------------------------------
-합계              9 files               97 tests passed
+합계              10 files              118 tests passed
 ```
 
 API 테스트 파일별 구성:
@@ -164,8 +165,8 @@ API 테스트 파일별 구성:
 | `financial.test.ts` | 10 | 평가금액/손익/환산/이동평균/분할수량 (T-001~T-008) |
 | `signals.test.ts` | 8 | 임계/전이/쿨다운/비활성/잘못된 값 (T-101~T-107) |
 | `history.test.ts` | 8 | `asOf` 거래, 과거 환율, 스냅샷 멱등/재계산 일치, 누락 구간 UNAVAILABLE, 시간대 경계 |
-| `api.test.ts` | 35 | 인증, 검증(422), 자산 CRUD(부분 수정/409/404/복원), 거래 수정/삭제, 포트폴리오 생성/수정, 대시보드, 오류 envelope |
-| `providers.test.ts` | 3 | Frankfurter URL 구성/관용 처리 |
+| `api.test.ts` | 38 | 인증, 검증(422), 자산 CRUD(부분 수정/409/404/복원) + 목록 `latestQuote`, 거래 수정/삭제, 포트폴리오 생성/수정, 대시보드, 오류 envelope, 최신 시세 갱신/역행 방지 |
+| `providers.test.ts` | 13 | Frankfurter URL 구성/관용 처리, Yahoo 한국 종목 접미사 자동 해석(.KS/.KQ) 및 타입 검증 |
 | `fx.test.ts` | 7 | 환율 direct/inverse/스테이블코인 페그 |
 
 웹 테스트 파일별 구성:
@@ -174,6 +175,8 @@ API 테스트 파일별 구성:
 | --- | --- | --- |
 | `format.test.ts` | 11 | 통화/수량/날짜 포맷, UNAVAILABLE≠0, 로컬 datetime 변환 |
 | `instrument.test.ts` | 4 | 공급자 링크 텍스트 파싱/직렬화 및 잘못된 형식 거부 |
+| `nav.test.ts` | 5 | 사이드바 링크 모델/활성 경로 판정(`/portfolio` vs `/portfolios` 구분) |
+| `sidebar.test.ts` | 3 | 사이드바 접힘 쿠키 이름/값 파싱 |
 
 추가로 `yarn typecheck`, `yarn lint`, `yarn build` 모두 통과했습니다.
 
@@ -184,7 +187,7 @@ API 테스트 파일별 구성:
 | 대상 | 구분 | 비고 |
 | --- | --- | --- |
 | Binance (`api.binance.com`) | **실연동** | BTCUSDT/ETHUSDT 실시세 수집 확인 |
-| Yahoo Chart (`query1.finance.yahoo.com`) | **실연동** | AAPL/MSFT/SPY/005930.KS 실시세 |
+| Yahoo Chart (`query1.finance.yahoo.com`) | **실연동** | AAPL/MSFT/SPY/005930.KS 실시세, 한국 종목 코드 자동 접미사 |
 | Frankfurter (`api.frankfurter.dev`, ECB) | **실연동** | USD/KRW 실환율 저장 확인 |
 | Mock 공급자 | 테스트 전용 | 결정적 합성 데이터, 네트워크 불필요 |
 
@@ -215,6 +218,14 @@ API 테스트 파일별 구성:
 10. **자산 삭제 = 비활성화**: 거래·시세·스냅샷이 참조하는 자산은 물리 삭제하지
     않고 `isActive=false`로 비활성화하며 같은 행에서 복원할 수 있습니다. 자연키
     (`symbol`+`market`+`currency`)는 수정 시에도 유일성을 유지합니다.
+11. **한국 종목 Yahoo 심볼 자동 해석 (신규)**: Yahoo는 국내 종목을 맨 코드로
+    조회하지 못하므로(`000660` ✗ → `000660.KS` ✓), `Instrument.market`이
+    `KRX`/`KOSPI`/`KOSDAQ`이고 코드가 6자리 숫자이면 공급자가 접미사를 자동으로
+    붙입니다(`KRX`는 `.KS`·`.KQ` 둘 다 시도). 사용자가 접미사를 직접 지정하면 그
+    값을 그대로 사용합니다. KRX는 KOSPI/KOSDAQ 구분이 없어, 파생 접미사 후보가
+    돌려준 Yahoo `instrumentType`이 자산 유형과 맞지 않으면(예: KOSDAQ 코드의
+    `.KS`가 `MUTUALFUND`로 해석됨) 다음 후보로 넘어가 잘못된 시세를 저장하지
+    않습니다. 공급자별 심볼 규약은 공급자 경계 안에 머물러 FR-011을 지킵니다.
 
 ### 열린 결정 (후속)
 
@@ -238,6 +249,41 @@ API 테스트 파일별 구성:
      `unavailableCount=0` 으로 정상화.
 3. **테스트 타입 오류**: `providers.test.ts` 의 `RequestInfo`(DOM 전용) 사용 →
    `string | URL` 로 교체하여 `yarn typecheck` 통과.
+4. **한국 종목 Yahoo 조회 실패 (실버그)**
+   - 증상: 신규 등록한 국내 종목(예: 하이닉스 `000660`)이 시장 데이터 조회에
+     실패. Yahoo는 `000660.KS`로 조회해야 하는데 맨 코드 `000660`으로 요청.
+   - 수정: 시장(`KRX`/`KOSPI`/`KOSDAQ`) + 6자리 코드 → Yahoo 접미사 자동 적용.
+     `KRX`는 KOSPI/KOSDAQ을 알 수 없어 `.KS`·`.KQ`를 순서대로 시도하고, 파생
+     후보의 `instrumentType`이 자산 유형과 다르면 건너뜁니다(예: KOSDAQ 코드
+     `247540`의 `.KS`는 `MUTUALFUND` 194,000, `.KQ`는 `EQUITY` 106,900).
+     `providers.test.ts`에 순수 함수 5건 + 공급자 5건 회귀 테스트 추가.
+   - 라이브 검증: `000660`(KRX, 공급자 미지정) → 1,272,000 KRW,
+     `247540`(KRX) → 106,900 KRW 정상 수집.
+5. **자산별 최신 시세 테이블 미갱신 (실버그)**
+   - 증상: 수집을 실행해도 `/market-data` 의 "자산별 최신 시세" 표와 `/assets` 목록의
+     현재가가 계속 비어 있었음("데이터 없음").
+   - 원인: 자산 **목록** API(`GET /assets`)가 `latestQuote` 를 포함하지 않았음
+     (`getLatestMany` 가 구현만 되어 있고 미사용). 또 `latest_quotes` 는 시세가
+     새로 insert 될 때만 갱신되어, 동일 시각의 중복 관측은 반영되지 않았고,
+     Mongo 구현은 뒤늦게 들어온 더 오래된 시세로 최신값을 덮어쓸 수 있었음.
+   - 수정: 목록 API가 `getLatestMany` 로 항목별 `latestQuote`(없으면 `null`)를
+     채우도록 하고, `insertQuote` 가 **매 관측마다** 최신값을 갱신하되 저장된
+     값보다 오래된 시세는 무시하도록 memory/mongo 두 구현을 일치시킴.
+     `api.test.ts` 에 회귀 테스트 3건 추가.
+   - 라이브 검증: 수집 실행 시 BTCUSDT/ETHUSDT 최신가 갱신, 휴장 중 종목도
+     `receivedAt` 갱신(가격·시세 시각은 유지). 목록 응답에 8개 자산의 최신가 반환.
+6. **사이드바 접힘 상태 미반영 (실버그)**
+   - 증상: 토글 시 좌측 메뉴가 아이콘 레일로 축소되도록 구현했으나, 새로고침
+     후 서버가 접힘 상태를 반영하지 않아 항상 펼쳐진 상태로 렌더링됨.
+   - 원인: 접힘 여부를 저장하는 쿠키 이름 상수를 `"use client"` 모듈
+     (`Sidebar.tsx`)에서 내보내고 서버 레이아웃(`layout.tsx`)에서 import 함.
+     Next.js는 클라이언트 모듈의 export를 **클라이언트 참조**로 바꾸므로
+     서버에서는 문자열이 아닌 프록시가 되어 쿠키 조회가 실패했음.
+   - 수정: 상수와 파싱 함수를 클라이언트 지시문이 없는 공용 모듈
+     (`lib/sidebar.ts`)로 옮겨 서버/클라이언트 양쪽에서 실제 문자열을 사용.
+     `sidebar.test.ts` 회귀 테스트 3건 추가.
+   - 검증: 쿠키 없음/`expanded` → `<aside class="sidebar">`,
+     `collapsed` → `<aside class="sidebar collapsed">` 로 SSR 출력 확인.
 
 ---
 
@@ -272,7 +318,7 @@ AAPL(30주), 005930(100주). 각 포지션에 가격·환율·평가금액·손�
 ## 11. 산출물 목록
 
 - 코드: `packages/shared`, `apps/api`, `apps/web`
-- 테스트: 위 5장 (97 tests)
+- 테스트: 위 5장 (110 tests)
 - 문서: `README.md`, `docs/API.md`, `docs/DATA_MODEL.md`,
   `docs/DEVELOPMENT.md`, `docs/IMPLEMENTATION_REPORT.md`, `docs/SPEC.md`
 - 운영: `yarn seed`, `yarn collect:once`, `/api/v1/system/*`

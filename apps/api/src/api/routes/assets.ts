@@ -20,7 +20,20 @@ export function createAssetsRouter(container: Container): Router {
     asyncHandler(async (req, res) => {
       const query = parseQuery(listInstrumentsQuery, req.query);
       const { items, total } = await container.instruments.list(query);
-      res.json({ items, total, limit: query.limit, offset: query.offset });
+      // Attach the materialised latest quote so list views (asset master,
+      // market-data) show current prices without one request per row.
+      const latest = await container.marketData.getLatestMany(
+        items.map((instrument) => instrument.instrumentId),
+      );
+      res.json({
+        items: items.map((instrument) => ({
+          ...instrument,
+          latestQuote: latest.get(instrument.instrumentId) ?? null,
+        })),
+        total,
+        limit: query.limit,
+        offset: query.offset,
+      });
     }),
   );
 

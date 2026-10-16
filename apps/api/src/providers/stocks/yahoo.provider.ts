@@ -1,6 +1,7 @@
 import type { AssetType, DataInterval, Instrument, MarketQuote } from "@jfolio/shared";
 import { fetchJson } from "../http";
 import { ProviderError, type MarketDataProvider, type ProviderCapabilities } from "../market-data.provider";
+import { yahooSymbolCandidates } from "./yahoo-symbol";
 
 interface YahooChartResponse {
   chart: {
@@ -12,6 +13,8 @@ interface YahooChartResponse {
             regularMarketPrice?: number;
             regularMarketTime?: number;
             previousClose?: number;
+            /** Yahoo's own classification, e.g. "EQUITY", "ETF", "MUTUALFUND". */
+            instrumentType?: string;
           };
           timestamp?: number[];
           indicators: {
@@ -39,8 +42,29 @@ const YAHOO_INTERVALS: Partial<Record<DataInterval, string>> = {
 const DAY_MS = 86_400_000;
 
 /**
+ * Yahoo instrument types accepted for an asset type when jFolio derived the
+ * exchange suffix. A KOSDAQ code requested with the KOSPI `.KS` suffix can
+ * resolve to an unrelated fund that shares the code (e.g. `247540.KS` is a
+ * MUTUALFUND while `247540.KQ` is the EQUITY), so a mismatched candidate is
+ * skipped in favour of the next board.
+ */
+const ACCEPTED_YAHOO_TYPES: Partial<Record<AssetType, string[]>> = {
+  STOCK: ["EQUITY"],
+  ETF: ["ETF", "MUTUALFUND"],
+};
+
+function typeMatches(assetType: AssetType, yahooType: string | undefined): boolean {
+  // Be lenient when Yahoo omits the classification.
+  if (!yahooType) return true;
+  const accepted = ACCEPTED_YAHOO_TYPES[assetType];
+  return accepted === undefined || accepted.includes(yahooType);
+}
+
+/**
  * Yahoo Finance chart provider (public, unofficial, no API key).
- * providerSymbol is the Yahoo ticker, e.g. "AAPL" or "005930.KS".
+ * providerSymbol is the Yahoo ticker, e.g. "AAPL" or "005930.KS". When it is a
+ * bare Korean code (market KRX/KOSPI/KOSDAQ) the exchange suffix is derived
+ * automatically.
  */
 export class YahooStockProvider implements MarketDataProvider {
   readonly providerId = "yahoo";
@@ -58,17 +82,11 @@ export class YahooStockProvider implements MarketDataProvider {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  private providerSymbol(instrument: Instrument): string {
-    const link = instrument.providers.find((p) => p.providerId === this.providerId);
-    return link?.providerSymbol ?? instrument.symbol;
-  }
-
-  private async request(
-    instrument: Instrument,
+  private async fetchChart(
+    symbol: string,
     range: string,
     interval: string,
   ): Promise<NonNullable<YahooChartResponse["chart"]["result"]>[number]> {
-    const symbol = this.providerSymbol(instrument);
     const url =
       `${this.baseUrl}/v8/finance/chart/${encodeURIComponent(symbol)}` +
       `?range=${range}&interval=${interval}`;
@@ -81,6 +99,47 @@ export class YahooStockProvider implements MarketDataProvider {
       throw new ProviderError(`Yahoo returned no result for ${symbol}`, this.providerId, false);
     }
     return result;
+  }
+
+  private async request(
+    instrument: Instrument,
+    range: string,
+    interval: string,
+  ): Promise<NonNullable<YahooChartResponse["chart"]["result"]>[number]> {
+    const link = instrument.providers.find((p) => p.providerId === this.providerId);
+    const raw = link?.providerSymbol?.trim() || instrument.symbol;
+    const candidates = yahooSymbolCandidates(raw, instrument.market);
+    if (candidates.length === 0) {
+      throw new ProviderError(`No Yahoo symbol for ${instrument.symbol}`, this.providerId, false);
+    }
+    // Try each candidate in order. The first that resolves to a plausible
+    // instrument wins; the last error is surfaced when none do. A suffix jFolio
+    // derived (not supplied by the user) is validated so a KOSDAQ code is not
+    // silently read from the KOSPI fund that happens to share its code.
+    let lastError: unknown;
+    for (const symbol of candidates) {
+      try {
+        const result = await this.fetchChart(symbol, range, interval);
+        if (symbol !== raw && !typeMatches(instrument.assetType, result.meta.instrumentType)) {
+          lastError = new ProviderError(
+            `Yahoo ${symbol} is ${result.meta.instrumentType ?? "unknown"}, not ${instrument.assetType}`,
+            this.providerId,
+            false,
+          );
+          continue;
+        }
+        return result;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new ProviderError(
+          `Yahoo request failed for ${instrument.symbol}`,
+          this.providerId,
+          false,
+        );
   }
 
   async getLatestQuote(instrument: Instrument): Promise<MarketQuote | null> {
