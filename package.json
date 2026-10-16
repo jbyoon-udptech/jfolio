@@ -1,0 +1,35 @@
+{
+  "name": "jfolio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "jFolio - 개인 금융자산 통합 관리 시스템 (market data collection + portfolio valuation + signals)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"yarn workspace @jfolio/api dev\" \"yarn workspace @jfolio/web dev\"",
+    "dev:api": "yarn workspace @jfolio/api dev",
+    "dev:web": "yarn workspace @jfolio/web dev",
+    "build": "yarn workspace @jfolio/shared typecheck && yarn workspace @jfolio/api build && yarn workspace @jfolio/web build",
+    "start:api": "yarn workspace @jfolio/api start",
+    "start:web": "yarn workspace @jfolio/web start",
+    "test": "yarn workspace @jfolio/shared test && yarn workspace @jfolio/api test && yarn workspace @jfolio/web test",
+    "test:api": "yarn workspace @jfolio/api test",
+    "test:web": "yarn workspace @jfolio/web test",
+    "typecheck": "yarn workspace @jfolio/shared typecheck && yarn workspace @jfolio/api typecheck && yarn workspace @jfolio/web typecheck",
+    "lint": "eslint . --ext .ts,.tsx",
+    "collect:once": "yarn workspace @jfolio/api collect:once",
+    "seed": "yarn workspace @jfolio/api seed"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^8.57.1",
+    "typescript": "^5.7.2"
+  }
+}

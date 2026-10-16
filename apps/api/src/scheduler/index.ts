@@ -1,0 +1,137 @@
+import type { PortfolioSnapshot, SnapshotType } from "@jfolio/shared";
+import type { AppConfig } from "../config";
+import type { CollectionRunOptions, CollectionRunResult } from "../services/collection.service";
+import type { Container } from "../container";
+import { msUntilNext, startOfDayInTimeZone, startOfHour } from "./time";
+
+export interface SchedulerHandle {
+  /** Stop all timers. Safe to call multiple times. */
+  stop(): void;
+  /** Run one collection pass immediately (used by the manual API and CLI). */
+  runCollection(options?: CollectionRunOptions): Promise<CollectionRunResult>;
+  /** Create snapshots for every portfolio at the given type + boundary. */
+  runSnapshots(type: SnapshotType, asOf?: Date): Promise<PortfolioSnapshot[]>;
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * FR-012 / FR-051: Periodic collection and snapshot scheduling. Collection is
+ * per asset type (so crypto can run every few seconds while equities run
+ * hourly); snapshots align to hour / local-day boundaries.
+ */
+export function startScheduler(container: Container, config: AppConfig): SchedulerHandle {
+  const timers: NodeJS.Timeout[] = [];
+  let running = false;
+
+  const runCollection = async (options?: CollectionRunOptions): Promise<CollectionRunResult> => {
+    if (running) {
+      // Skip overlapping runs; a slow provider must not stack up jobs.
+      return {
+        jobs: [],
+        instrumentsProcessed: 0,
+        inserted: 0,
+        duplicates: 0,
+        rejected: 0,
+        signalsTriggered: 0,
+        errors: ["collection already running"],
+      };
+    }
+    running = true;
+    try {
+      return await container.collection.run(options);
+    } finally {
+      running = false;
+    }
+  };
+
+  const runSnapshots = async (
+    type: SnapshotType,
+    asOf?: Date,
+  ): Promise<PortfolioSnapshot[]> => {
+    const portfolios = await container.portfolios.list();
+    const results: PortfolioSnapshot[] = [];
+    for (const portfolio of portfolios) {
+      try {
+        const snapshot = await container.snapshots.createSnapshot({
+          portfolioId: portfolio.portfolioId,
+          snapshotType: type,
+          asOf,
+          baseCurrency: portfolio.baseCurrency,
+        });
+        results.push(snapshot);
+      } catch (error) {
+        // A single portfolio failure must not abort the scheduled batch.
+        // eslint-disable-next-line no-console
+        console.error(`[scheduler] snapshot failed for ${portfolio.portfolioId}:`, error);
+      }
+    }
+    return results;
+  };
+
+  if (config.collection.schedulerEnabled) {
+    const assetTypes: Array<keyof AppConfig["collection"]["intervals"]> = ["STOCK", "CRYPTO", "FX"];
+    for (const assetType of assetTypes) {
+      const seconds = config.collection.intervals[assetType];
+      if (!seconds || seconds <= 0) continue;
+      const timer = setInterval(() => {
+        void runCollection({ assetTypes: [assetType] });
+      }, seconds * 1000);
+      timer.unref?.();
+      timers.push(timer);
+    }
+  }
+
+  if (config.snapshot.hourlyEnabled) {
+    scheduleAligned(
+      timers,
+      (from) => msUntilNext(startOfHour, from, HOUR_MS),
+      () => runSnapshots("INTRADAY", startOfHour(new Date())),
+    );
+  }
+
+  if (config.snapshot.dailyEnabled) {
+    const timeZone = config.timezone;
+    const dailyBoundary = (date: Date) => startOfDayInTimeZone(date, timeZone);
+    const dayMs = 24 * HOUR_MS;
+    scheduleAligned(
+      timers,
+      (from) => msUntilNext(dailyBoundary, from, dayMs),
+      () => runSnapshots("DAILY", dailyBoundary(new Date())),
+    );
+  }
+
+  return {
+    stop: () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.length = 0;
+    },
+    runCollection,
+    runSnapshots,
+  };
+}
+
+/**
+ * Run `task` at each aligned boundary. Uses a self-rescheduling timeout so the
+ * delay is recomputed every cycle (robust to clock drift and long tasks).
+ */
+function scheduleAligned(
+  timers: NodeJS.Timeout[],
+  delayFor: (from: Date) => number,
+  task: () => Promise<unknown>,
+): void {
+  const tick = () => {
+    const delay = delayFor(new Date());
+    const timer = setTimeout(() => {
+      void Promise.resolve(task())
+        .catch((error) => {
+          // eslint-disable-next-line no-console
+          console.error("[scheduler] scheduled task failed:", error);
+        })
+        .finally(tick);
+    }, delay);
+    timer.unref?.();
+    timers.push(timer);
+  };
+  tick();
+}

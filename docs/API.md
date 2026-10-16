@@ -1,0 +1,224 @@
+# jFolio REST API
+
+- 기본 경로: `/api/v1`
+- 형식: JSON, 날짜는 ISO 8601 (저장은 UTC, UI 기본 표시는 `Asia/Seoul`)
+- 통화: ISO 4217 코드 (`USDT` 등 크립토 표기도 사용)
+- 오류 응답: 공통 envelope `{ "error": { "code", "message", "details?" } }`
+
+## 인증
+
+`API_AUTH_TOKEN` 이 설정된 경우에만 인증이 필요합니다. 다음 중 하나로 토큰을
+전달합니다.
+
+```
+Authorization: Bearer <token>
+x-api-key: <token>
+```
+
+인증 예외(항상 공개):
+
+- `GET /health` (루트, 버전 경로 밖)
+- `GET /api/v1/system/health`
+
+토큰이 설정되지 않으면 모든 요청이 통과합니다(로컬 개발 기본값).
+
+## 오류 코드
+
+| HTTP | code | 설명 |
+| --- | --- | --- |
+| 400 | `BAD_REQUEST` | 잘못된 요청 |
+| 401 | `UNAUTHORIZED` | 토큰 누락/불일치 |
+| 404 | `NOT_FOUND` | 리소스 없음 / 미정의 경로 |
+| 409 | `CONFLICT` | 중복 등 충돌 |
+| 422 | `VALIDATION_ERROR` | Zod 검증 실패 (`details` 포함) |
+| 503 | `UNAVAILABLE` | 일시적 사용 불가 |
+
+---
+
+## 1. Dashboard
+
+### `GET /api/v1/dashboard`
+
+`portfolioId` 가 없으면 사용자의 기본 포트폴리오를 사용하며, 없으면 생성합니다.
+
+Query:
+
+| 이름 | 타입 | 설명 |
+| --- | --- | --- |
+| `portfolioId` | string | 조회할 포트폴리오 |
+| `baseCurrency` | string | 기준 통화 (기본 `KRW`) |
+
+응답(예):
+
+```json
+{
+  "portfolioId": "pf_...",
+  "baseCurrency": "KRW",
+  "asOf": "2026-10-16T07:15:06.345Z",
+  "totalAssetValue": 128873374.95,
+  "dailyChange": null,
+  "dailyChangeRate": null,
+  "totalCostBasis": 104322804.9,
+  "unrealizedPnL": 24550570.05,
+  "unrealizedReturn": 23.5333,
+  "dataStatus": "NORMAL",
+  "unavailableCount": 0,
+  "allocationByAssetType": [{ "key": "CASH", "marketValueBase": 76918000, "weight": 59.68 }],
+  "allocationByCurrency": [{ "key": "KRW", "marketValueBase": 71550000, "weight": 55.5 }],
+  "topHoldings": [ { "symbol": "005930", "marketValueBase": 21550000, "status": "NORMAL", "...": "..." } ],
+  "recentSignals": [],
+  "lastDataUpdatedAt": "2026-10-16T07:15:06.345Z"
+}
+```
+
+> `dailyChange` / `dailyChangeRate` 는 현재 또는 24시간 전 기준 평가금액이
+> `UNAVAILABLE` 이면 `null` 입니다 (0으로 표시하지 않음, UI-006).
+
+---
+
+## 2. Assets
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| GET | `/api/v1/assets` | 자산 목록 (`assetType`, `market`, `currency`, `search`, `isActive`, `limit`, `offset`) |
+| POST | `/api/v1/assets` | 자산 등록 |
+| GET | `/api/v1/assets/:id` | 자산 상세 + `latestQuote` |
+| PATCH | `/api/v1/assets/:id` | 자산 정보 수정 |
+| DELETE | `/api/v1/assets/:id` | 자산 비활성화 (물리 삭제 대신 `isActive=false`) |
+| GET | `/api/v1/assets/:id/quotes` | 과거 시세 (`interval`, `from`, `to`, `limit`) |
+
+자산 등록 요청(예):
+
+```json
+{
+  "symbol": "AAPL",
+  "name": "Apple Inc.",
+  "assetType": "STOCK",
+  "market": "NASDAQ",
+  "currency": "USD",
+  "providers": [{ "providerId": "yahoo", "providerSymbol": "AAPL" }]
+}
+```
+
+`assetType` 값: `STOCK | ETF | CRYPTO | FX | BOND | COMMODITY | CASH`.
+`interval` 값: `tick | 10s | 1m | 5m | 1h | 1d`.
+
+---
+
+## 3. Portfolios
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| GET | `/api/v1/portfolios` | 포트폴리오 목록 |
+| POST | `/api/v1/portfolios` | 포트폴리오 생성 |
+| GET | `/api/v1/portfolios/:id` | 포트폴리오 상세 |
+| GET | `/api/v1/portfolios/:id/holdings` | 보유 자산 평가 |
+| GET | `/api/v1/portfolios/:id/valuation` | 평가금액 (`asOf`, `baseCurrency`) |
+| GET | `/api/v1/portfolios/:id/history` | 과거 평가 시계열 (`from`, `to`, `interval`) |
+| GET | `/api/v1/portfolios/:id/snapshots` | 스냅샷 조회 (`snapshotType`, `from`, `to`, `limit`) |
+| POST | `/api/v1/portfolios/:id/snapshots` | 온디맨드 스냅샷 생성 (`snapshotType`, `asOf`, `baseCurrency`) |
+
+`/holdings` 응답에는 각 포지션의 `price`, `fxRateToBase`, `marketValueBase`,
+`unrealizedPnL`, `status`, `statusReason` 이 포함됩니다. 가격/환율을 해석할 수
+없는 포지션은 `status: "UNAVAILABLE"` 이며 합계에서 제외됩니다.
+
+`snapshotType` 값: `INTRADAY | DAILY | ON_DEMAND`.
+
+---
+
+## 4. Transactions
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| GET | `/api/v1/transactions` | 거래 이력 (`portfolioId`, `instrumentId`, `type`, `from`, `to`, `limit`, `offset`) |
+| POST | `/api/v1/transactions` | 거래 등록 |
+| GET | `/api/v1/transactions/:id` | 거래 단건 |
+| PATCH | `/api/v1/transactions/:id` | 거래 수정 |
+| DELETE | `/api/v1/transactions/:id` | 거래 삭제 (204) |
+
+거래 등록 요청(예):
+
+```json
+{
+  "portfolioId": "pf_...",
+  "instrumentId": "ins_...",
+  "type": "BUY",
+  "timestamp": "2026-10-06T01:00:00.000Z",
+  "quantity": 100,
+  "price": 72000,
+  "currency": "KRW",
+  "fee": 1500
+}
+```
+
+`type` 값: `BUY | SELL | DEPOSIT | WITHDRAWAL | TRANSFER_IN | TRANSFER_OUT |
+DIVIDEND | INTEREST | FEE | SPLIT | ADJUSTMENT`. `currency` 는 선택이며
+생략 시 상품 통화로 해석됩니다. 거래 생성/수정/삭제는 이후 스냅샷을
+무효화하고 포지션을 원장에서 재계산합니다 (FR-034).
+
+---
+
+## 5. Signals
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| GET | `/api/v1/signals/rules` | 규칙 목록 (`portfolioId`, `instrumentId`, `isEnabled`) |
+| POST | `/api/v1/signals/rules` | 규칙 생성 |
+| GET | `/api/v1/signals/rules/:id` | 규칙 단건 |
+| PATCH | `/api/v1/signals/rules/:id` | 규칙 수정 |
+| DELETE | `/api/v1/signals/rules/:id` | 규칙 비활성화 |
+| GET | `/api/v1/signals/events` | 발생 이력 (`ruleId`, `instrumentId`, `portfolioId`, `status`, `from`, `to`, `limit`, `offset`) |
+
+규칙 생성 요청(예):
+
+```json
+{
+  "instrumentId": "ins_...",
+  "type": "PRICE_THRESHOLD",
+  "threshold": 200000,
+  "referenceType": "FIXED_PRICE",
+  "cooldownSeconds": 3600,
+  "isEnabled": true
+}
+```
+
+`type` 값: `PRICE_DROP | PRICE_RISE | PRICE_THRESHOLD | PORTFOLIO_THRESHOLD`.
+`referenceType` 값: `FIXED_PRICE | PREVIOUS_CLOSE | ROLLING_HIGH | ROLLING_WINDOW`.
+
+발생 규칙: 조건이 false→true 로 전이하는 순간에만 발생하며, 쿨다운이 지나면
+새 에피소드로 다시 발생할 수 있습니다. `(ruleId, deduplicationKey)` 유니크
+제약으로 중복 저장을 방지합니다.
+
+---
+
+## 6. System
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| GET | `/api/v1/system/health` | 시스템 상태 (인증 예외) |
+| GET | `/api/v1/system/data-status` | 수집/데이터 최신성 상태 |
+| GET | `/api/v1/system/providers` | 공급자 상태 목록 |
+| POST | `/api/v1/system/collection/run` | 수동 수집 실행 (인증 필요) |
+
+수동 수집 요청(예):
+
+```json
+{ "assetTypes": ["CRYPTO", "FX"], "instrumentIds": ["ins_..."] }
+```
+
+두 필드 모두 선택이며, 생략 시 활성 상품 전체를 수집합니다.
+
+---
+
+## 7. 데이터 상태 값
+
+`dataStatus` / `status` 는 다음 중 하나입니다 (UI-006).
+
+| 값 | 의미 |
+| --- | --- |
+| `NORMAL` | 정상 |
+| `DELAYED` | 갱신 지연 |
+| `STALE` | 데이터 노후 |
+| `ERROR` | 수집 실패 |
+| `NO_DATA` | 데이터 없음 |
+| `UNAVAILABLE` | 평가 불가 (0으로 대체 금지) |
