@@ -78,6 +78,12 @@ yarn dev
 #   Web  http://localhost:3000
 ```
 
+`yarn seed` 는 35종의 기본 자산(국내주식 8 · 국내 ETF 4 · 미국주식 7 · 미국
+ETF 5 · 코인 5 · FX 3 · 현금 3)과 데모 거래 9건을 생성합니다. 자산은
+`(symbol, market, currency)` 기준으로 upsert 되어 반복 실행해도 안전하며,
+데모 거래는 기본 포트폴리오가 비어 있을 때만 만들어집니다. 금·채권은 별도
+자산군 대신 `GLD`/`TLT` ETF 로 포함됩니다.
+
 API만 띄우려면 `yarn dev:api`, 웹만 띄우려면 `yarn dev:web` 을 사용합니다.
 
 ### 수동 수집 / 상태 확인
@@ -308,8 +314,15 @@ cp deploy/production.app.env.example deploy/production.app.env  # 런타임 환�
 ./deploy.sh production                 # 빌드 → 패키징 → 전송 → PM2 재기동 → 헬스체크
 ./deploy.sh production --skip-build    # 기존 빌드 산출물 재사용 (빠른 재배포)
 ./deploy.sh production --skip-restart  # 파일만 동기화, 프로세스는 재시작 안 함
+./deploy.sh production --seed          # 전송 후 서버 DB에 기준 상품/데모 시드 실행
 ./deploy.sh --help
 ```
+
+`--seed` 는 `apps/api/dist/cli/seed.js`(빌드 산출물)를 서버에서 `node` 로 실행해
+서버 MongoDB(`<DEPLOY_PATH>/.env` 의 `MONGODB_URI`)에 기본 자산 목록을
+upsert 합니다. 멱등이며, 데모 거래는 기본 포트폴리오가 비어 있을 때만
+생성됩니다. `--skip-build` 와 함께 쓸 때는 미리 `yarn build` 로 `dist/cli/seed.js`
+를 만들어 두어야 합니다.
 
 배포 스크립트는 `yarn install --frozen-lockfile` → `yarn build` 로 로컬 빌드 후,
 `.deploy/<target>/` 에 릴리즈를 조립하고(프로덕션 의존성만 `yarn install

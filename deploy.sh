@@ -39,11 +39,13 @@ Usage: ./deploy.sh [target] [options]
 Options:
   --skip-build      Reuse existing build output (apps/api/dist, apps/web/.next).
   --skip-restart    Sync files only; do not restart PM2 processes.
+  --seed            Run the instrument/portfolio seed on the server after sync.
   -h, --help        Show this help.
 
 Examples:
   ./deploy.sh production
   ./deploy.sh production --skip-build
+  ./deploy.sh production --seed
 EOF
 }
 
@@ -51,10 +53,12 @@ EOF
 TARGET="production"
 SKIP_BUILD=0
 SKIP_RESTART=0
+RUN_SEED=0
 for arg in "$@"; do
   case "$arg" in
     --skip-build)   SKIP_BUILD=1 ;;
     --skip-restart) SKIP_RESTART=1 ;;
+    --seed)         RUN_SEED=1 ;;
     -h|--help)      usage; exit 0 ;;
     -*)             die "unknown option: $arg (try --help)" ;;
     *)              TARGET="$arg" ;;
@@ -118,6 +122,9 @@ fi
 
 [[ -f "$REPO_ROOT/apps/api/dist/index.js" ]] || die "apps/api/dist/index.js not found; run a build first"
 [[ -d "$REPO_ROOT/apps/web/.next" ]] || die "apps/web/.next not found; run a build first"
+if [[ $RUN_SEED -eq 1 && ! -f "$REPO_ROOT/apps/api/dist/cli/seed.js" ]]; then
+  die "--seed requires apps/api/dist/cli/seed.js; run a full build (omit --skip-build)"
+fi
 
 # ---------- assemble release ----------
 STAGE_DIR="$REPO_ROOT/.deploy/${TARGET}"
@@ -159,6 +166,22 @@ log "uploading application environment (.env)"
 scp "${SCP_OPTS[@]}" "$APP_ENV_FILE" "$REMOTE:$DEPLOY_PATH/.env" >/dev/null
 ssh "${SSH_OPTS[@]}" "$REMOTE" "chmod 600 '$DEPLOY_PATH/.env'"
 ok "files synced"
+
+# ---------- seed (optional) ----------
+if [[ $RUN_SEED -eq 1 ]]; then
+  log "seeding database on $REMOTE"
+  ssh "${SSH_OPTS[@]}" "$REMOTE" bash -s <<REMOTE
+set -euo pipefail
+# Non-interactive SSH skips ~/.bashrc; load nvm-managed node when present.
+export NVM_DIR="\$HOME/.nvm"
+if [ -s "\$NVM_DIR/nvm.sh" ]; then
+  . "\$NVM_DIR/nvm.sh"
+fi
+cd '$DEPLOY_PATH'
+node apps/api/dist/cli/seed.js
+REMOTE
+  ok "database seeded"
+fi
 
 # ---------- restart ----------
 if [[ $SKIP_RESTART -eq 0 ]]; then

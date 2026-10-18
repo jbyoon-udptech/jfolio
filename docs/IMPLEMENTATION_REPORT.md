@@ -35,7 +35,7 @@
 
 ```bash
 yarn install
-yarn seed        # 상품 9종 + 데모 거래 5건 + 실데이터 1회 수집
+yarn seed        # 상품 35종 + 데모 거래 9건 + 실데이터 1회 수집
 yarn dev         # API :3001, Web :3000
 ```
 
@@ -186,9 +186,9 @@ API 테스트 파일별 구성:
 
 | 대상 | 구분 | 비고 |
 | --- | --- | --- |
-| Binance (`api.binance.com`) | **실연동** | BTCUSDT/ETHUSDT 실시세 수집 확인 |
-| Yahoo Chart (`query1.finance.yahoo.com`) | **실연동** | AAPL/MSFT/SPY/005930.KS 실시세, 한국 종목 코드 자동 접미사 |
-| Frankfurter (`api.frankfurter.dev`, ECB) | **실연동** | USD/KRW 실환율 저장 확인 |
+| Binance (`api.binance.com`) | **실연동** | BTCUSDT/ETHUSDT/SOLUSDT 실시세 수집 확인 |
+| Yahoo Chart (`query1.finance.yahoo.com`) | **실연동** | AAPL/MSFT/NVDA/SPY/QQQ/005930.KS/000660.KS 실시세, 한국 종목 코드 자동 접미사 |
+| Frankfurter (`api.frankfurter.dev`, ECB) | **실연동** | USD/KRW, EUR/KRW, JPY/KRW 실환율 저장 확인 |
 | Mock 공급자 | 테스트 전용 | 결정적 합성 데이터, 네트워크 불필요 |
 
 - 기본값 `*_PROVIDER=live` 로 실제 공개 API를 호출합니다.
@@ -301,7 +301,9 @@ API 테스트 파일별 구성:
 | `unavailableCount` | 0 |
 
 보유 포지션(수집 시세 기준): KRW 현금, USD 현금(1,345.9 환산), BTCUSDT(0.15),
-AAPL(30주), 005930(100주). 각 포지션에 가격·환율·평가금액·손익이 채워졌습니다.
+AAPL(30주), 005930(100주) — 위 수치는 초기 5건 데모 거래 기준 관측값입니다.
+시드 확장 후에는 NVDA(20주), QQQ(10주), SOLUSDT(20), 000660(30주)가 추가되어
+각 포지션에 가격·환율·평가금액·손익이 채워집니다.
 
 ---
 
