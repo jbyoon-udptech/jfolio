@@ -13,6 +13,11 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# Deployment (generated release + real config; examples are committed)
+.deploy/
+deploy/*.env
+!deploy/*.env.example
+
 # OS / editor
 .DS_Store
 .idea/

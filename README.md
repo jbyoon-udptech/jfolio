@@ -248,3 +248,84 @@ API 계약(인증/검증/CRUD), 공급자 URL 구성 등은 실제 단위 테스
 - [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) — MongoDB 컬렉션/인덱스/관계
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — 개발/테스트/설계 노트
 - [`docs/IMPLEMENTATION_REPORT.md`](docs/IMPLEMENTATION_REPORT.md) — 구현 결과 보고서
+
+---
+
+## 12. 배포 (OCI)
+
+개발자 Linux PC에서 **`./deploy.sh production` 한 번**으로 OCI 인스턴스에
+릴리즈합니다. 개발 PC에서 빌드한 뒤 API 산출물(`apps/api/dist`)·웹 산출물
+(`apps/web/.next`)·프로덕션 의존성만 묶어 `rsync` 로 전송하고, 서버의 PM2가
+API/웹을 (재)기동합니다.
+
+```
+개발 PC: yarn build → .deploy/<target>/ (release) ──rsync──▶ OCI: <DEPLOY_PATH>
+                                                              └─ PM2: jfolio-api(3001) + jfolio-web(3000)
+                                                              └─ MongoDB(로컬 mongod)
+```
+
+### 12.1 서버 1회 준비 (OCI 인스턴스)
+
+- Node.js **>= 20** 설치.
+- MongoDB 6+ 설치/기동 (`mongod`). 배포 스크립트는 연결만 사용합니다.
+- PM2는 배포 시 없으면 `npm install -g pm2` 로 자동 설치를 시도합니다
+  (권한 문제 시 `sudo npm install -g pm2`).
+- 부팅 시 자동 시작을 원하면 서버에서 1회:
+  `pm2 startup` (안내되는 명령 실행) → `pm2 save`.
+- OCI 보안 목록/방화벽에서 웹 포트(기본 `3000`)를 엽니다. API(3001)는
+  `127.0.0.1` 에만 바인딩되므로 열지 않습니다.
+- (선택) 80/443으로 서비스하려면 nginx를 앞단에 두고 `proxy_pass` 로
+  `http://127.0.0.1:3000` 을 연결합니다.
+
+### 12.2 개발 PC 준비
+
+`node`, `yarn`, `rsync`, `ssh`, `scp` 필요. OCI 접속용 SSH 키를 준비합니다.
+
+```bash
+cp deploy/production.env.example deploy/production.env          # 접속 정보
+cp deploy/production.app.env.example deploy/production.app.env  # 런타임 환경
+# 두 파일을 실제 값으로 수정 (둘 다 .gitignore 대상, 커밋되지 않음)
+```
+
+`deploy/production.env`:
+
+| 변수 | 설명 |
+| --- | --- |
+| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | OCI 접속 정보 |
+| `DEPLOY_SSH_KEY` | 개인키 경로 (`~` 확장) |
+| `DEPLOY_PATH` | 서버 릴리즈 디렉터리 (없으면 생성) |
+| `DEPLOY_APP_ENV_FILE` | 업로드할 앱 환경 파일 (기본 `deploy/<target>.app.env`) |
+| `DEPLOY_API_PORT` / `DEPLOY_WEB_PORT` | 배포 후 헬스체크 포트 |
+| `NEXT_PUBLIC_*` | 빌드 시 인라인되는 값 (예: `NEXT_PUBLIC_TIME_ZONE`) |
+
+`deploy/production.app.env` 는 서버의 `<DEPLOY_PATH>/.env` 로 업로드되어 PM2가
+두 프로세스에 주입합니다. **`API_AUTH_TOKEN` 은 반드시 긴 랜덤 값으로** 설정하고,
+웹이 API를 호출할 때 같은 토큰을 사용하도록 `API_BASE_URL` 과 함께 관리하세요.
+
+### 12.3 배포
+
+```bash
+./deploy.sh production                 # 빌드 → 패키징 → 전송 → PM2 재기동 → 헬스체크
+./deploy.sh production --skip-build    # 기존 빌드 산출물 재사용 (빠른 재배포)
+./deploy.sh production --skip-restart  # 파일만 동기화, 프로세스는 재시작 안 함
+./deploy.sh --help
+```
+
+배포 스크립트는 `yarn install --frozen-lockfile` → `yarn build` 로 로컬 빌드 후,
+`.deploy/<target>/` 에 릴리즈를 조립하고(프로덕션 의존성만 `yarn install
+--production`), `rsync -az --delete` 로 전송합니다. 서버의 `.env` 는 보존되며
+업로드 파일로 교체됩니다.
+
+### 12.4 운영
+
+```bash
+# 서버에서
+pm2 status
+pm2 logs jfolio-api          # API 로그
+pm2 logs jfolio-web          # 웹 로그
+pm2 restart jfolio-api
+```
+
+문제 발생 시: API 기동 실패는 MongoDB 연결(`MONGODB_URI`)과
+`pm2 logs jfolio-api` 를, 웹 데이터 미표시는 `API_BASE_URL`/`API_AUTH_TOKEN`
+일치 여부를 확인하세요.
