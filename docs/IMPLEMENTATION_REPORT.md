@@ -1,9 +1,9 @@
 # jFolio 구현 결과 보고서
 
-작성일: 2026-10-16
-대상: `SPEC.md` 기반 jFolio MVP 구현
+작성일: 2026-10-19 (최초 2026-10-16)
+대상: `SPEC.md` 기반 jFolio MVP + Phase 1 Local Login
 결과: **실행 가능한 모노레포 MVP** — API, 대시보드, 데이터 수집, 평가, 시그널,
-테스트, 문서 포함. 아래 모든 수치는 실제 실행 결과입니다.
+로컬 계정 인증, 테스트, 문서 포함. 아래 모든 수치는 실제 실행 결과입니다.
 
 ---
 
@@ -18,15 +18,18 @@
 - 라이브 환경에서 시드 → 수집 → 평가 → 대시보드까지 **end-to-end로 검증**했습니다.
 - 검증 중 발견한 실제 버그(Frankfurter `providerSymbol` 규약 불일치)와 설계
   공백(USDT 표시 자산의 기준통화 환산)을 수정하고 회귀 테스트를 추가했습니다.
+- **Phase 1 Local Login** 을 추가했습니다: 이메일/비밀번호(bcrypt), MongoDB
+  서버 세션, 로그인/로그아웃/`/me` API, CSRF, 로그인 rate limit, 페이지/API
+  접근 제어, 로그인 UI. Google SSO는 Phase 2용 구조만 준비했습니다.
 
 ### 최종 검증 상태
 
 | 항목 | 결과 |
 | --- | --- |
-| `yarn test` | **118 tests / 10 files, 전부 통과** |
+| `yarn test` | **133 tests / 12 files, 전부 통과** |
 | `yarn typecheck` | 통과 (shared + api + web) |
 | `yarn lint` | 통과 |
-| `yarn build` | 통과 (API tsup, Web next build 19 routes) |
+| `yarn build` | 통과 (API tsup, Web next build 19 routes + middleware) |
 | 라이브 E2E | `/health`, `/api/v1/dashboard`, `/system/*` 실제 데이터 반환 |
 
 ---
@@ -36,8 +39,14 @@
 ```bash
 yarn install
 yarn seed        # 상품 35종 + 데모 거래 9건 + 실데이터 1회 수집
-yarn dev         # API :3001, Web :3000
+CREATE_USER_PASSWORD='change-me-please' yarn create-user \
+  --email you@example.com --name "Your Name"   # 로그인 계정 (최초 1회)
+yarn dev         # API :3001, Web :3000 → http://localhost:3000/login
 ```
+
+`AUTH_REQUIRED` 기본값은 `true` 입니다. 인증 없이 기존 로컬 동작을 유지하려면
+`AUTH_REQUIRED=false` 로 설정합니다 (운영 금지). 계정 생성/로그인 절차와 전체
+환경 변수는 [`README.md`](../README.md) 3~4장을 참고하세요.
 
 검증:
 
@@ -65,6 +74,12 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
   서비스 경계 안에서만 수행됩니다.
 - **웹**: 모든 조회/변경을 Next.js 서버에서 API로 프록시하여 CORS/토큰 노출을
   회피합니다.
+- **인증**: Express 앱의 `/api/auth` 라우터 + `express-session` +
+  `connect-mongo`. 사용자(`users`)와 인증 수단(`user_identities`)을 분리해
+  Phase 2 Google identity를 같은 계정에 연결할 수 있습니다. Next.js는
+  `/api/auth/*` 동일 출처 프록시로 `Set-Cookie`를 중계하고, 보호 페이지는
+  middleware(빠른 리다이렉트) + `(app)` layout(권한 있는 검증)으로 이중
+  보호합니다.
 
 상세: [`DEVELOPMENT.md`](./DEVELOPMENT.md), [`DATA_MODEL.md`](./DATA_MODEL.md),
 [`API.md`](./API.md).
@@ -133,7 +148,7 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 | --- | --- | --- | --- |
 | NFR-001 | 응답 시간 | ◐ | 인덱스/경량 쿼리 설계. 정식 벤치마크는 미실시 |
 | NFR-002 | 장애 대응 | ✅ | 공급자 실패 격리, 상태 기록, UNAVAILABLE 처리 |
-| NFR-003 | 사용자 데이터 보호 | ✅ | 선택적 Bearer/`x-api-key` 인증 |
+| NFR-003 | 사용자 데이터 보호 | ✅ | 로컬 계정 + 서버 세션, bcrypt 해시, CSRF, 로그인 rate limit, 세션/페이지/API 접근 제어 |
 | NFR-004 | 금융 정밀도 | ✅ | `decimal.js` 기반 연산. T-004b |
 | NFR-005 | 로그/운영 상태 | ✅ | `collection_jobs`, `provider_states`, health |
 | NFR-006 | 테스트 환경 | ✅ | Mock 공급자 + 인메모리 리포지토리 |
@@ -145,6 +160,22 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 | T-001~T-008 | 금융 계산 | `apps/api/test/financial.test.ts` |
 | T-101~T-107 | 시그널 | `apps/api/test/signals.test.ts` |
 | 14.3 과거 데이터 | 이력/스냅샷/시간대 | `apps/api/test/history.test.ts` (H-001~H-006) |
+| TEST-001~TEST-012 | Phase 1 로그인/세션/CSRF/rate limit | `apps/api/test/auth.test.ts` |
+
+### 4.5 Phase 1 Local Login (AUTH-001~AUTH-009)
+
+| ID | 요구사항 | 상태 | 구현/근거 |
+| --- | --- | --- | --- |
+| AUTH-001 | 이메일/비밀번호 로그인 | ✅ | `POST /api/auth/login`, `LocalAuthProvider`, `LoginForm` |
+| AUTH-002 | 안전한 비밀번호 저장 | ✅ | bcrypt(cost 12, 테스트 4), 평문/해시 비노출, TEST-004 |
+| AUTH-003 | 서버 세션 + 안전한 쿠키 | ✅ | `connect-mongo`, HttpOnly/Secure/SameSite, `SESSION_MAX_AGE_MS`, TEST-005/011 |
+| AUTH-004 | 사용자 열거/타이밍 완화 | ✅ | 동일한 401 응답 + 더미 bcrypt 비교, TEST-003/010 |
+| AUTH-005 | 로그인 시 세션 재발급 | ✅ | `req.session.regenerate()` + save, TEST-006 |
+| AUTH-006 | 관리자 계정 프로비저닝 | ✅ | `UserService` + `yarn create-user` CLI, HTTP signup 없음 |
+| AUTH-007 | 로그아웃/세션 무효화 | ✅ | 서버 세션 destroy + 쿠키 삭제, TEST-007 |
+| AUTH-008 | CSRF 보호 | ✅ | double-submit 쿠키(`jfolio.csrf`) + `x-csrf-token`, login/logout 강제, TEST-008 |
+| AUTH-009 | 로그인 rate limit / 접근 제어 | ✅ | IP+email 제한(429), `/api/v1` 세션/토큰 게이트, TEST-001/009/012 |
+| Phase 2 | Google SSO 확장 구조 | ○ | `AuthProviderId`, `user_identities`, provider 인터페이스/설정만 준비 (라우트 없음) |
 
 ---
 
@@ -152,10 +183,10 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
 
 ```
 packages/shared   Test Files 1 passed   Tests 11 passed
-apps/api          Test Files 6 passed   Tests 84 passed
+apps/api          Test Files 7 passed   Tests 99 passed
 apps/web          Test Files 4 passed   Tests 23 passed
 --------------------------------------------------------
-합계              10 files              118 tests passed
+합계              12 files              133 tests passed
 ```
 
 API 테스트 파일별 구성:
@@ -168,6 +199,7 @@ API 테스트 파일별 구성:
 | `api.test.ts` | 38 | 인증, 검증(422), 자산 CRUD(부분 수정/409/404/복원) + 목록 `latestQuote`, 거래 수정/삭제, 포트폴리오 생성/수정, 대시보드, 오류 envelope, 최신 시세 갱신/역행 방지 |
 | `providers.test.ts` | 13 | Frankfurter URL 구성/관용 처리, Yahoo 한국 종목 접미사 자동 해석(.KS/.KQ) 및 타입 검증 |
 | `fx.test.ts` | 7 | 환율 direct/inverse/스테이블코인 페그 |
+| `auth.test.ts` | 15 | TEST-001~012: 무세션 401, 로그인/`me`, 열거 방지, bcrypt 저장, 쿠키 속성, 세션 재발급, 로그아웃, CSRF, rate limit, 비활성 계정, 만료, API 토큰 호환 + 계정 프로비저닝/Google 비활성 |
 
 웹 테스트 파일별 구성:
 
@@ -226,11 +258,36 @@ API 테스트 파일별 구성:
     돌려준 Yahoo `instrumentType`이 자산 유형과 맞지 않으면(예: KOSDAQ 코드의
     `.KS`가 `MUTUALFUND`로 해석됨) 다음 후보로 넘어가 잘못된 시세를 저장하지
     않습니다. 공급자별 심볼 규약은 공급자 경계 안에 머물러 FR-011을 지킵니다.
+12. **인증 경계**: Phase 1 인증은 기존 Express API(`/api/auth`)에 두어 새
+    서비스/프레임워크를 추가하지 않았습니다. 세션은 `express-session` +
+    `connect-mongo` 로 MongoDB에 저장하고, 웹은 동일 출처 `/api/auth/*` 프록시로
+    쿠키를 중계합니다. 브라우저는 세션 쿠키, Next.js 서버는 기존
+    `API_AUTH_TOKEN` 을 서비스 자격 증명으로 사용하므로 `/api/v1` 의 기존
+    서버 간 호출 계약을 깨지 않습니다.
+13. **인증 수단 분리**: `users` 는 내부 계정/상태/역할만, `user_identities` 는
+    provider(local/Google)별 외부 식별자를 가집니다. local identity의
+    `providerUserId` 는 정규화된 이메일입니다. Phase 2 Google 로그인은 identity를
+    조회/연결하는 provider만 추가하면 됩니다.
+14. **CSRF**: 세션 쿠키 기반 변경 요청은 double-submit 방식(서버 세션의
+    `csrfToken`, 읽기 가능한 `jfolio.csrf` 쿠키, `x-csrf-token` 헤더)으로
+    검증합니다. 로그인/로그아웃도 강제하며, 서비스 토큰 요청은 ambient
+    credential이 없으므로 CSRF 검사 대상에서 제외합니다.
+15. **세션/쿠키 정책**: 로그인 시 세션 ID를 재발급하고(고정 공격 방지),
+    로그아웃 시 서버 세션을 파괴합니다. 쿠키는 HttpOnly/Secure/SameSite/만료를
+    적용하고, 운영에서는 `SESSION_STORE=memory` 와 32자 미만 `SESSION_SECRET` 을
+    설정 검증 단계에서 거부합니다.
+16. **계정 프로비저닝**: HTTP 회원가입을 만들지 않고 `create-user` CLI로만
+    계정을 생성합니다. 비밀번호는 `CREATE_USER_PASSWORD` 또는 stdin으로 받아
+    프로세스 목록/셸 히스토리 노출을 줄이고, bcrypt 해시만 저장합니다.
+17. **로그인 방어**: IP + 정규화 이메일 기준 rate limit을 적용하고, 존재하지
+    않는 이메일/잘못된 비밀번호/비활성 계정을 동일한 401로 응답하며 더미 bcrypt
+    비교로 타이밍 차이를 줄입니다.
 
 ### 열린 결정 (후속)
 
 - 실현손익·기간수익률(TWR/MWR) API/UI 노출 여부와 계산 방식.
-- 멀티유저/권한 모델 (현재 `userId` 는 예약 필드).
+- 멀티유저 데이터 격리 및 역할 기반 권한 검사 (현재 인증은 사용자 단위지만
+  포트폴리오/거래는 `DEFAULT_USER_ID` 공유 데이터).
 - BOND/COMMODITY 공급자 및 파생상품 모델링.
 - 요율 제한 대응(백오프/캐시 정책)의 정식화.
 
@@ -309,7 +366,10 @@ AAPL(30주), 005930(100주) — 위 수치는 초기 5건 데모 거래 기준 �
 
 ## 10. 알려진 한계
 
-- 인증은 단일 공유 토큰 기반(사용자별 권한/멀티테넌시 없음).
+- Phase 1 인증은 로컬 이메일/비밀번호 + 세션만 지원합니다. Google SSO,
+  회원가입, 비밀번호 재설정, 이메일 인증은 없습니다.
+- 로그인 사용자 개념은 도입되었지만 금융 데이터는 여전히 `DEFAULT_USER_ID`
+  기준의 단일 공유 데이터이며, 사용자별 격리/역할 기반 권한 검사는 없습니다.
 - 실현손익/배당/이자는 계산되지만 API·UI에 노출되지 않음 (FR-046 부분).
 - NFR-001(응답 시간)은 정식 부하/지연 벤치마크를 수행하지 않음.
 - BOND/COMMODITY는 타입만 정의, 기본 공급자 없음.
@@ -320,7 +380,58 @@ AAPL(30주), 005930(100주) — 위 수치는 초기 5건 데모 거래 기준 �
 ## 11. 산출물 목록
 
 - 코드: `packages/shared`, `apps/api`, `apps/web`
-- 테스트: 위 5장 (110 tests)
+- 테스트: 위 5장 (**133 tests / 12 files**)
 - 문서: `README.md`, `docs/API.md`, `docs/DATA_MODEL.md`,
   `docs/DEVELOPMENT.md`, `docs/IMPLEMENTATION_REPORT.md`, `docs/SPEC.md`
-- 운영: `yarn seed`, `yarn collect:once`, `/api/v1/system/*`
+- 운영: `yarn seed`, `yarn collect:once`, `yarn create-user`,
+  `node apps/api/dist/cli/create-user.js`, `/api/v1/system/*`
+
+---
+
+## 12. Phase 1 Local Login 변경 파일
+
+### Shared
+
+- `packages/shared/src/types/auth.ts` — 사용자/세션/로그인 응답 타입
+- `packages/shared/src/schemas/auth.ts` — 이메일 정규화, 비밀번호/로그인/계정 생성 스키마
+- `packages/shared/src/index.ts` — auth 타입/스키마 export
+
+### API
+
+- `apps/api/src/users/` — `user.types.ts`, `user.repository.ts`, `password.ts`, `user.service.ts`
+- `apps/api/src/auth/` — `auth.types.ts`, `auth.service.ts`, `local-auth.provider.ts`,
+  `auth.middleware.ts`, `session.ts`
+- `apps/api/src/repositories/` — memory/Mongo 사용자·identity 저장소 및 container 연결
+- `apps/api/src/db/collections.ts` — `users`, `user_identities`, `sessions` + 인덱스
+- `apps/api/src/api/auth-routes.ts` — csrf/me/providers/login/logout
+- `apps/api/src/api/app.ts` — 세션/인증/CSRF 미들웨어 및 라우터 마운트
+- `apps/api/src/config/env.ts` — 인증/세션/rate limit/Google 예약 설정과 운영 검증
+- `apps/api/src/cli/create-user.ts` — 관리자 계정 생성 CLI
+- `apps/api/tsup.config.ts` — `create-user` 빌드 산출물 포함
+- `apps/api/test/auth.test.ts` — TEST-001~012 및 프로비저닝 테스트
+
+### Web
+
+- `apps/web/src/lib/auth-config.ts` — 인증 플래그/쿠키 이름/인증 URL
+- `apps/web/src/lib/server-auth.ts` — 페이지 세션 확인, mutation 가드, CSRF 검증
+- `apps/web/src/lib/client-fetch.ts` — CSRF 쿠키/헤더 처리 `apiFetch`
+- `apps/web/src/app/api/auth/[...path]/route.ts` — `/api/auth/*` 쿠키 중계 프록시
+- `apps/web/src/middleware.ts` — 미인증 페이지 리다이렉트
+- `apps/web/src/app/(app)/layout.tsx` — 보호 레이아웃(서버 세션 검증) + 사이드바 사용자
+- `apps/web/src/app/login/page.tsx`, `apps/web/src/components/LoginForm.tsx` — 로그인 UI
+- `apps/web/src/components/Sidebar.tsx` — 사용자 표시/로그아웃
+- 기존 mutation route/component — `guardMutation`/`apiFetch` 적용
+
+### 문서/환경
+
+- `.env.example`, `deploy/production.app.env.example` — 인증/세션 환경 변수
+- `README.md`, `docs/API.md`, `docs/DATA_MODEL.md`, `docs/IMPLEMENTATION_REPORT.md`
+
+### 주요 환경 변수
+
+`AUTH_REQUIRED`, `AUTH_LOCAL_ENABLED`, `AUTH_GOOGLE_ENABLED`, `SESSION_SECRET`,
+`SESSION_STORE`, `SESSION_COOKIE_NAME`, `AUTH_CSRF_COOKIE_NAME`,
+`SESSION_MAX_AGE_MS`, `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_SAMESITE`,
+`SESSION_TRUST_PROXY`, `AUTH_BCRYPT_ROUNDS`, `AUTH_LOGIN_RATE_LIMIT_WINDOW_MS`,
+`AUTH_LOGIN_RATE_LIMIT_MAX`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`GOOGLE_REDIRECT_URI`(예약), `API_AUTH_TOKEN`(선택적 서비스 토큰).

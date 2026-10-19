@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Transaction } from "@/lib/types";
@@ -65,7 +67,7 @@ export function TransactionRow({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/transactions/${transaction.transactionId}`, {
+      const res = await apiFetch(`/api/transactions/${transaction.transactionId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -100,7 +102,7 @@ export function TransactionRow({
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/transactions/${transaction.transactionId}`, {
+      const res = await apiFetch(`/api/transactions/${transaction.transactionId}`, {
         method: "DELETE",
       });
       if (!res.ok) {

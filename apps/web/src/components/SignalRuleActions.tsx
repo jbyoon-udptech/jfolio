@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -13,7 +15,7 @@ export function SignalRuleActions({ ruleId, isEnabled }: { ruleId: string; isEna
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/signals/rules/${ruleId}`, {
+      const res = await apiFetch(`/api/signals/rules/${ruleId}`, {
         method,
         headers: { "content-type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),

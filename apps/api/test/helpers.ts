@@ -22,6 +22,11 @@ export function createTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     FX_PROVIDER: "mock",
     COLLECTION_SCHEDULER_ENABLED: "false",
     API_AUTH_TOKEN: "",
+    // Existing route tests predate user login and call the API anonymously.
+    AUTH_REQUIRED: "false",
+    AUTH_LOCAL_ENABLED: "true",
+    AUTH_BCRYPT_ROUNDS: "4",
+    SESSION_STORE: "memory",
     ...overrides,
   });
 }

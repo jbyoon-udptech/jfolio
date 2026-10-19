@@ -12,6 +12,9 @@ MongoDB native driver 사용. 컬렉션 정의는
 
 | 컬렉션 | 용도 | 보존 원칙 |
 | --- | --- | --- |
+| `users` | 내부 사용자 계정 | 계정 상태/감사 목적 보존 |
+| `user_identities` | 인증 수단(local/Google) 연결 | 사용자당 provider별 1개 |
+| `sessions` | 서버 측 로그인 세션 | 만료/로그아웃 시 삭제 |
 | `instruments` | 금융상품 마스터 | 사용 이력 보존, 비활성화 방식 |
 | `market_quotes` | 시세 시계열 | 중복 제거 후 시계열 보존 |
 | `latest_quotes` | 종목별 최신 시세 | 항상 최신으로 갱신 |
@@ -64,6 +67,24 @@ MongoDB native driver 사용. 컬렉션 정의는
 - 논리 중복 키: `(base, quote, timestamp)`
 - FX 상품 시세가 저장될 때 `symbol`(`USD/KRW`) 또는 `providerSymbol` 에서
   base/quote 를 파싱해 `fx_rates` 로 파생 저장합니다.
+
+### User / UserIdentity
+
+```
+User         { userId, email, name, passwordHash, status, role, createdAt, updatedAt }
+UserIdentity { identityId, userId, provider, providerUserId, createdAt }
+```
+
+- `email` 은 trim/소문자로 정규화된 유일 값입니다.
+- `passwordHash` 는 bcrypt 해시이며, 외부 provider 전용 계정은 `null` 입니다.
+  API 응답/로그에는 절대 포함하지 않습니다.
+- `status`: `active | disabled` (비활성 계정은 로그인/세션 사용 불가).
+- `role`: `user | admin` (Phase 1에서는 저장만 하며 세분화된 권한 검사는 후속).
+- `provider`: `local | google`. Phase 1은 `local` 만 생성하며, local identity의
+  `providerUserId` 는 정규화된 이메일입니다. 이 분리로 Phase 2에서 Google
+  identity를 같은 내부 사용자에 연결할 수 있습니다.
+- `sessions` 는 `express-session`/`connect-mongo` 가 관리하며 `SESSION_MAX_AGE_MS`
+  기준 TTL 을 가집니다.
 
 ### Portfolio
 
@@ -139,6 +160,10 @@ ProviderState { providerId, lastRunAt, lastSuccessAt, lastDataTimestamp,
 
 | 컬렉션 | 키 | 옵션 |
 | --- | --- | --- |
+| `users` | `{email}` | unique |
+| `user_identities` | `{provider, providerUserId}` | unique |
+| `user_identities` | `{userId, provider}` | unique |
+| `sessions` | TTL (connect-mongo) | `SESSION_MAX_AGE_MS` 기준 |
 | `instruments` | `{symbol, market, currency}` | unique |
 | `instruments` | `{assetType, isActive}` | |
 | `market_quotes` | `{instrumentId, providerId, interval, timestamp}` | unique |

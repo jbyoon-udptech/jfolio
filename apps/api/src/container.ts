@@ -1,4 +1,5 @@
 import type { AppConfig } from "./config";
+import { AuthService } from "./auth/auth.service";
 import { createProviderRegistry, type ProviderRegistry } from "./providers/registry";
 import type { Repositories } from "./repositories/types";
 import { CollectionService } from "./services/collection.service";
@@ -17,6 +18,7 @@ export interface Container {
   config: AppConfig;
   repos: Repositories;
   providers: ProviderRegistry;
+  auth: AuthService;
   instruments: InstrumentService;
   marketData: MarketDataService;
   positions: PositionService;
@@ -50,6 +52,7 @@ export function createContainer(
     config,
     repos,
     providers,
+    auth: new AuthService(repos.users, config),
     instruments: new InstrumentService(repos),
     marketData,
     positions: new PositionService(repos),

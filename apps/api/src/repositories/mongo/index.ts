@@ -1,5 +1,6 @@
 import type { Collection, Db, Filter } from "mongodb";
 import type {
+  AuthProviderId,
   CollectionJob,
   FxRate,
   Instrument,
@@ -13,6 +14,8 @@ import type {
   Transaction,
 } from "@jfolio/shared";
 import { COLLECTIONS } from "../../db/collections";
+import type { User, UserIdentity } from "../../users/user.types";
+import type { UserRepository } from "../../users/user.repository";
 import type {
   CollectionJobRepository,
   FxRateRepository,
@@ -42,6 +45,58 @@ function stripId<T>(doc: unknown): T {
     return rest as T;
   }
   return doc as T;
+}
+
+class MongoUserRepository implements UserRepository {
+  constructor(
+    private readonly users: Collection<User>,
+    private readonly identities: Collection<UserIdentity>,
+  ) {}
+
+  async create(user: User): Promise<User> {
+    await this.users.insertOne({ ...user });
+    return user;
+  }
+
+  async update(userId: string, patch: Partial<User>): Promise<User | null> {
+    const result = await this.users.findOneAndUpdate(
+      { userId },
+      { $set: { ...patch, userId, updatedAt: new Date() } },
+      { returnDocument: "after", projection: { _id: 0 } },
+    );
+    return result ? stripId<User>(result) : null;
+  }
+
+  async findById(userId: string): Promise<User | null> {
+    const doc = await this.users.findOne({ userId }, NO_ID);
+    return doc ? stripId<User>(doc) : null;
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    const doc = await this.users.findOne({ email }, NO_ID);
+    return doc ? stripId<User>(doc) : null;
+  }
+
+  async createIdentity(identity: UserIdentity): Promise<UserIdentity> {
+    await this.identities.insertOne({ ...identity });
+    return identity;
+  }
+
+  async findIdentity(
+    provider: AuthProviderId,
+    providerUserId: string,
+  ): Promise<UserIdentity | null> {
+    const doc = await this.identities.findOne({ provider, providerUserId }, NO_ID);
+    return doc ? stripId<UserIdentity>(doc) : null;
+  }
+
+  async findIdentityForUser(
+    userId: string,
+    provider: AuthProviderId,
+  ): Promise<UserIdentity | null> {
+    const doc = await this.identities.findOne({ userId, provider }, NO_ID);
+    return doc ? stripId<UserIdentity>(doc) : null;
+  }
 }
 
 class MongoInstrumentRepository implements InstrumentRepository {
@@ -524,6 +579,10 @@ class MongoProviderStateRepository implements ProviderStateRepository {
 
 export function createMongoRepositories(db: Db): Repositories {
   return {
+    users: new MongoUserRepository(
+      db.collection<User>(COLLECTIONS.users),
+      db.collection<UserIdentity>(COLLECTIONS.userIdentities),
+    ),
     instruments: new MongoInstrumentRepository(db.collection<Instrument>(COLLECTIONS.instruments)),
     quotes: new MongoQuoteRepository(
       db.collection<MarketQuote>(COLLECTIONS.marketQuotes),

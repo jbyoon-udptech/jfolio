@@ -27,5 +27,11 @@ export const conflict = (message: string) =>
 export const unauthorized = (message = "Authentication required") =>
   new HttpError(401, ERROR_CODES.UNAUTHORIZED, message);
 
+export const forbidden = (message = "Access denied") =>
+  new HttpError(403, ERROR_CODES.FORBIDDEN, message);
+
+export const rateLimited = (message = "Too many requests") =>
+  new HttpError(429, ERROR_CODES.RATE_LIMITED, message);
+
 export const unavailable = (message: string, details?: unknown) =>
   new HttpError(503, ERROR_CODES.UNAVAILABLE, message, details);

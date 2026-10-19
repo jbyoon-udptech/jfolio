@@ -7,30 +7,95 @@
 
 ## 인증
 
-`API_AUTH_TOKEN` 이 설정된 경우에만 인증이 필요합니다. 다음 중 하나로 토큰을
-전달합니다.
+Phase 1은 **이메일/비밀번호 로그인 + 서버 세션**입니다. 회원가입·비밀번호
+재설정·이메일 인증은 제공하지 않으며, 계정은 관리자가
+`yarn create-user`(운영: `node dist/cli/create-user.js`)로 생성합니다.
+Google SSO는 Phase 2 예약입니다.
+
+### `/api/auth` 엔드포인트
+
+인증 라우트는 버전 경로(`/api/v1`) 밖에 있으며, 웹에서는 Next.js의 동일 출처
+프록시(`/api/auth/*`)를 통해 호출합니다.
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| GET | `/api/auth/csrf` | 현재 세션의 CSRF 토큰 반환 (없으면 `null`) |
+| GET | `/api/auth/me` | `{ authenticated, user }` — `user`는 안전한 공개 필드만 포함 |
+| GET | `/api/auth/providers` | `{ local, google }` — Phase 1은 `local=true`, `google=false` |
+| POST | `/api/auth/login` | `{ email, password }` 로 로그인. 성공 시 세션 쿠키 발급 |
+| POST | `/api/auth/logout` | 서버 세션 파괴 + 인증 쿠키 삭제 |
+
+로그인 응답(예):
+
+```json
+{
+  "success": true,
+  "user": { "id": "usr_...", "email": "you@example.com", "name": "You", "role": "user" }
+}
+```
+
+- 비밀번호는 bcrypt 해시로만 저장되며 응답/로그에 포함되지 않습니다.
+- 존재하지 않는 이메일, 잘못된 비밀번호, 비활성 계정은 모두 동일한
+  `401 Invalid email or password` 로 응답합니다(사용자 열거 방지).
+- 로그인 성공 시 세션 ID를 새로 발급합니다(session fixation 방지).
+- 로그인은 IP + 정규화된 이메일 기준으로 rate limit 되며, 초과 시 `429`
+  `RATE_LIMITED` 를 반환합니다.
+
+### 세션 쿠키
+
+| 쿠키 | 기본 이름 | 속성 |
+| --- | --- | --- |
+| 세션 | `jfolio.sid` | `HttpOnly`, `Secure`(운영), `SameSite=Lax`, `Path=/`, 만료 `SESSION_MAX_AGE_MS` |
+| CSRF | `jfolio.csrf` | 읽기 가능(`HttpOnly=false`), 같은 `Secure`/`SameSite`/만료 |
+
+세션은 서버 측 저장소(MongoDB `sessions`)에 보관됩니다. 운영에서
+`SESSION_STORE=memory` 는 거부됩니다. 로그아웃과 세션 만료 시 서버 세션이
+무효화됩니다.
+
+### CSRF (double-submit)
+
+세션 쿠키를 사용하는 **변경 요청**(`POST`/`PUT`/`PATCH`/`DELETE`)은 다음을
+모두 만족해야 합니다.
+
+1. `jfolio.csrf` 쿠키 값과
+2. `x-csrf-token` 헤더 값이 일치
+
+`GET /api/auth/csrf`(또는 로그인 전 웹 클라이언트의 자동 호출)로 토큰을 받은
+뒤 헤더에 넣습니다. 로그인/로그아웃도 CSRF 검사를 강제합니다. `GET`/`HEAD`/
+`OPTIONS` 는 검사하지 않습니다.
+
+### `/api/v1` 인증
+
+`/api/v1` 은 다음 중 하나를 허용합니다.
+
+- **브라우저 세션**: 위 세션 쿠키
+- **서비스 토큰**: `API_AUTH_TOKEN` 이 설정된 경우
 
 ```
 Authorization: Bearer <token>
 x-api-key: <token>
 ```
 
+`API_AUTH_TOKEN` 은 Next.js 서버가 업스트림 호출에 사용하는 신뢰된 서비스
+자격 증명입니다. 브라우저에 노출하지 마세요. `AUTH_REQUIRED=false` 이고
+`API_AUTH_TOKEN` 도 없으면 기존처럼 모든 요청이 통과합니다(로컬 개발 전용).
+
 인증 예외(항상 공개):
 
 - `GET /health` (루트, 버전 경로 밖)
 - `GET /api/v1/system/health`
-
-토큰이 설정되지 않으면 모든 요청이 통과합니다(로컬 개발 기본값).
 
 ## 오류 코드
 
 | HTTP | code | 설명 |
 | --- | --- | --- |
 | 400 | `BAD_REQUEST` | 잘못된 요청 |
-| 401 | `UNAUTHORIZED` | 토큰 누락/불일치 |
+| 401 | `UNAUTHORIZED` | 세션/토큰 누락 또는 로그인 실패 |
+| 403 | `FORBIDDEN` | CSRF 토큰 불일치 / 비활성 로그인 수단 |
 | 404 | `NOT_FOUND` | 리소스 없음 / 미정의 경로 |
 | 409 | `CONFLICT` | 중복 등 충돌 |
 | 422 | `VALIDATION_ERROR` | Zod 검증 실패 (`details` 포함) |
+| 429 | `RATE_LIMITED` | 로그인 시도 제한 초과 |
 | 503 | `UNAVAILABLE` | 일시적 사용 불가 |
 
 ---

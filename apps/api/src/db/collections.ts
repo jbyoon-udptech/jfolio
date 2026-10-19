@@ -1,6 +1,9 @@
 import type { Db, IndexSpecification } from "mongodb";
 
 export const COLLECTIONS = {
+  users: "users",
+  userIdentities: "user_identities",
+  sessions: "sessions",
   instruments: "instruments",
   marketQuotes: "market_quotes",
   latestQuotes: "latest_quotes",
@@ -23,6 +26,21 @@ interface IndexDefinition {
 
 /** SPEC 9.5 index design. */
 export const INDEX_DEFINITIONS: IndexDefinition[] = [
+  {
+    collection: COLLECTIONS.users,
+    keys: { email: 1 },
+    options: { unique: true, name: "uniq_user_email" },
+  },
+  {
+    collection: COLLECTIONS.userIdentities,
+    keys: { provider: 1, providerUserId: 1 },
+    options: { unique: true, name: "uniq_identity_provider_user" },
+  },
+  {
+    collection: COLLECTIONS.userIdentities,
+    keys: { userId: 1, provider: 1 },
+    options: { unique: true, name: "uniq_identity_user_provider" },
+  },
   {
     collection: COLLECTIONS.instruments,
     keys: { symbol: 1, market: 1, currency: 1 },

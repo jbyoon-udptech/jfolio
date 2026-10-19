@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import type { AuthUser, MeResponse } from "@jfolio/shared";
 import type {
   Dashboard,
   HistoryPoint,
@@ -13,6 +15,7 @@ import type {
   Transaction,
   Valuation,
 } from "./types";
+import { API_URL, AUTH_URL, CSRF_COOKIE_NAME } from "./auth-config";
 
 /**
  * Server-side data access for the dashboard. All calls happen on the Next.js
@@ -20,7 +23,7 @@ import type {
  * and there is no cross-origin configuration to maintain.
  */
 
-const BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3001/api/v1";
+const BASE_URL = API_URL;
 const TOKEN = process.env.API_AUTH_TOKEN ?? "";
 
 export class ApiError extends Error {
@@ -37,29 +40,86 @@ function authHeaders(): Record<string, string> {
   return TOKEN ? { authorization: `Bearer ${TOKEN}` } : {};
 }
 
+/**
+ * Forward the browser session to the API. Without this, the Next server would
+ * only authenticate with the service token and could not enforce per-user
+ * sessions.
+ */
+export function requestCookieHeader(): string {
+  try {
+    return cookies()
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+  } catch {
+    return "";
+  }
+}
+
+function requestCsrfHeader(method: string): Record<string, string> {
+  if (["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) return {};
+  try {
+    const token = cookies().get(CSRF_COOKIE_NAME)?.value;
+    return token ? { "x-csrf-token": token } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function readApiError(res: Response): Promise<string> {
+  let message = `API request failed (${res.status})`;
+  try {
+    const body = (await res.json()) as { error?: { message?: string } };
+    if (body?.error?.message) message = body.error.message;
+  } catch {
+    /* ignore non-JSON error bodies */
+  }
+  return message;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = init.method ?? "GET";
+  const cookie = requestCookieHeader();
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
       ...authHeaders(),
+      ...(cookie ? { cookie } : {}),
+      ...requestCsrfHeader(method),
       ...(init.headers ?? {}),
     },
     cache: "no-store",
   });
-  if (!res.ok) {
-    let message = `API request failed (${res.status})`;
-    try {
-      const body = (await res.json()) as { error?: { message?: string } };
-      if (body?.error?.message) message = body.error.message;
-    } catch {
-      /* ignore non-JSON error bodies */
-    }
-    throw new ApiError(res.status, message);
-  }
+  if (!res.ok) throw new ApiError(res.status, await readApiError(res));
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+/** Auth calls always use the browser session, never the service token. */
+async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const cookie = requestCookieHeader();
+  const res = await fetch(`${AUTH_URL}${path}`, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      ...(cookie ? { cookie } : {}),
+      ...(init.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new ApiError(res.status, await readApiError(res));
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+/** Server-side auth helpers used by layouts and route guards. */
+export const authApi = {
+  me: () => authRequest<MeResponse>("/me"),
+  providers: () => authRequest<{ local: boolean; google: boolean }>("/providers"),
+};
+
+export type { AuthUser };
 
 function query(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
@@ -168,4 +228,4 @@ export async function safe<T>(
   }
 }
 
-export { BASE_URL };
+export { AUTH_URL, BASE_URL };

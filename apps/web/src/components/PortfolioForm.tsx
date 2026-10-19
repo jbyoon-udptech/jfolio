@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -28,7 +30,7 @@ export function PortfolioForm() {
     };
 
     try {
-      const res = await fetch("/api/portfolios", {
+      const res = await apiFetch("/api/portfolios", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

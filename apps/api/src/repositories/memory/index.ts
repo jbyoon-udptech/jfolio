@@ -12,6 +12,9 @@ import type {
   SignalRule,
   Transaction,
 } from "@jfolio/shared";
+import type { AuthProviderId } from "@jfolio/shared";
+import type { User, UserIdentity } from "../../users/user.types";
+import type { UserRepository } from "../../users/user.repository";
 import type {
   CollectionJobRepository,
   FxRateRepository,
@@ -460,8 +463,94 @@ export class MemoryProviderStateRepository implements ProviderStateRepository {
   }
 }
 
+export class MemoryUserRepository implements UserRepository {
+  private readonly users = new Map<string, User>();
+  private readonly identities = new Map<string, UserIdentity>();
+
+  private identityKey(provider: AuthProviderId, providerUserId: string): string {
+    return `${provider}|${providerUserId}`;
+  }
+
+  async create(user: User): Promise<User> {
+    for (const existing of this.users.values()) {
+      if (existing.email === user.email) throw duplicateKey();
+    }
+    this.users.set(user.userId, clone(user));
+    return clone(user);
+  }
+
+  async update(userId: string, patch: Partial<User>): Promise<User | null> {
+    const current = this.users.get(userId);
+    if (!current) return null;
+    if (patch.email && patch.email !== current.email) {
+      for (const existing of this.users.values()) {
+        if (existing.userId !== userId && existing.email === patch.email) throw duplicateKey();
+      }
+    }
+    const next: User = { ...current, ...patch, userId, updatedAt: new Date() };
+    this.users.set(userId, next);
+    return clone(next);
+  }
+
+  async findById(userId: string): Promise<User | null> {
+    const found = this.users.get(userId);
+    return found ? clone(found) : null;
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    for (const user of this.users.values()) {
+      if (user.email === email) return clone(user);
+    }
+    return null;
+  }
+
+  async createIdentity(identity: UserIdentity): Promise<UserIdentity> {
+    const external = this.identityKey(identity.provider, identity.providerUserId);
+    for (const existing of this.identities.values()) {
+      if (this.identityKey(existing.provider, existing.providerUserId) === external) {
+        throw duplicateKey();
+      }
+      if (existing.userId === identity.userId && existing.provider === identity.provider) {
+        throw duplicateKey();
+      }
+    }
+    this.identities.set(identity.identityId, clone(identity));
+    return clone(identity);
+  }
+
+  async findIdentity(
+    provider: AuthProviderId,
+    providerUserId: string,
+  ): Promise<UserIdentity | null> {
+    for (const identity of this.identities.values()) {
+      if (
+        identity.provider === provider &&
+        identity.providerUserId === providerUserId
+      ) {
+        return clone(identity);
+      }
+    }
+    return null;
+  }
+
+  async findIdentityForUser(
+    userId: string,
+    provider: AuthProviderId,
+  ): Promise<UserIdentity | null> {
+    for (const identity of this.identities.values()) {
+      if (identity.userId === userId && identity.provider === provider) return clone(identity);
+    }
+    return null;
+  }
+}
+
+function duplicateKey(): Error {
+  return Object.assign(new Error("Duplicate key"), { code: 11000 });
+}
+
 export function createMemoryRepositories(): Repositories {
   return {
+    users: new MemoryUserRepository(),
     instruments: new MemoryInstrumentRepository(),
     quotes: new MemoryQuoteRepository(),
     fxRates: new MemoryFxRateRepository(),

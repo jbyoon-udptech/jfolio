@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toLocalDateTimeInput } from "@/lib/format";
@@ -61,7 +63,7 @@ export function TransactionForm({
     };
 
     try {
-      const res = await fetch("/api/transactions", {
+      const res = await apiFetch("/api/transactions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

@@ -72,11 +72,20 @@ mongosh --eval 'db.runCommand({ ping: 1 })'
 # 4) 기준 데이터 + 데모 포트폴리오 시드 (실데이터 1회 수집 포함)
 yarn seed
 
-# 5) API + 웹 동시 실행
+# 5) 로그인용 계정 생성 (최초 1회)
+CREATE_USER_PASSWORD='change-me-please' yarn create-user \
+  --email you@example.com --name "Your Name"
+
+# 6) API + 웹 동시 실행
 yarn dev
 #   API  http://127.0.0.1:3001
 #   Web  http://localhost:3000
 ```
+
+웹(`http://localhost:3000`)에 접속하면 `/login` 으로 이동합니다. 위에서 만든
+이메일/비밀번호로 로그인하면 대시보드로 들어가며, 사이드바 하단의 `로그아웃`
+으로 세션을 종료할 수 있습니다. 비밀번호는 bcrypt 해시로만 저장되고 로그에
+남지 않습니다.
 
 `yarn seed` 는 35종의 기본 자산(국내주식 8 · 국내 ETF 4 · 미국주식 7 · 미국
 ETF 5 · 코인 5 · FX 3 · 현금 3)과 데모 거래 9건을 생성합니다. 자산은
@@ -86,7 +95,32 @@ ETF 5 · 코인 5 · FX 3 · 현금 3)과 데모 거래 9건을 생성합니다.
 
 API만 띄우려면 `yarn dev:api`, 웹만 띄우려면 `yarn dev:web` 을 사용합니다.
 
-### 수동 수집 / 상태 확인
+### 3.1 계정 생성 / 로그인 방식
+
+- **회원가입·비밀번호 재설정·이메일 인증은 제공하지 않습니다.** 계정은
+  관리자가 CLI로 생성합니다.
+- 비밀번호는 환경 변수(`CREATE_USER_PASSWORD`) 또는 stdin으로만 전달합니다.
+  인자로 넘기면 셸 히스토리에 남으므로 권장하지 않습니다.
+
+```bash
+# 환경 변수 사용
+CREATE_USER_PASSWORD='...' yarn create-user --email you@example.com --name "You"
+
+# stdin 사용 (셸 히스토리에 남지 않음)
+printf '%s' '...' | yarn create-user --email you@example.com --name "You" --password-stdin
+
+# 관리자 역할 지정 (기본 user)
+CREATE_USER_PASSWORD='...' yarn create-user --email admin@example.com --name "Admin" --role admin
+```
+
+- 인증이 필요 없는 예전 로컬 모드로 되돌리려면 `AUTH_REQUIRED=false` 로
+  설정합니다. 이 경우 페이지 보호와 브라우저 변경 요청의 세션 검사가
+  생략됩니다(운영 환경에서는 사용하지 마세요).
+- Google SSO는 **Phase 2** 예정이며 현재 구현되어 있지 않습니다. 사용자
+  계정과 인증 수단(`user_identities`)이 분리되어 있어 Google identity를
+  추가할 수 있는 구조만 준비되어 있습니다.
+
+### 3.2 수동 수집 / 상태 확인
 
 ```bash
 # 스케줄러와 무관하게 1회 수집
@@ -113,7 +147,22 @@ curl -s http://127.0.0.1:3001/api/v1/dashboard
 | `BASE_CURRENCY` | `KRW` | 기본 기준 통화 |
 | `API_HOST` / `API_PORT` | `127.0.0.1` / `3001` | API 바인딩 |
 | `API_BASE_PATH` | `/api/v1` | API 기본 경로 |
-| `API_AUTH_TOKEN` | (빈 값) | 설정 시 Bearer / `x-api-key` 인증 활성화 |
+| `API_AUTH_TOKEN` | (빈 값) | 선택적 서비스 토큰. 설정 시 `/api/v1` 이 세션 **또는** Bearer / `x-api-key` 를 허용 |
+| `AUTH_REQUIRED` | `true` | 보호 페이지/API에 로그인 필수. `false` 는 무인증 레거시 모드 |
+| `AUTH_LOCAL_ENABLED` | `true` | 이메일/비밀번호 로그인 활성화 |
+| `AUTH_GOOGLE_ENABLED` | `false` | Phase 2 예약 (현재 Google 라우트 없음) |
+| `SESSION_SECRET` | 개발용 기본값 | 세션 서명 키. 운영에서는 **필수**, 32자 이상 |
+| `SESSION_STORE` | `mongo` (test: `memory`) | 서버 세션 저장소. 운영에서 `memory` 금지 |
+| `SESSION_COOKIE_NAME` | `jfolio.sid` | HttpOnly 세션 쿠키 이름 (웹과 동일해야 함) |
+| `AUTH_CSRF_COOKIE_NAME` | `jfolio.csrf` | 읽기 가능한 double-submit CSRF 쿠키 이름 |
+| `SESSION_MAX_AGE_MS` | `604800000` (7일) | 세션/쿠키 만료 |
+| `SESSION_COOKIE_SECURE` | `auto` (운영 `true`) | Secure 쿠키 여부 |
+| `SESSION_COOKIE_SAMESITE` | `lax` | `lax` / `strict` / `none` |
+| `SESSION_TRUST_PROXY` | Secure와 동일 | Next.js 프록시의 `X-Forwarded-Proto` 신뢰 |
+| `AUTH_BCRYPT_ROUNDS` | `12` | bcrypt cost (테스트는 4) |
+| `AUTH_LOGIN_RATE_LIMIT_WINDOW_MS` | `900000` | 로그인 시도 제한 창 (15분) |
+| `AUTH_LOGIN_RATE_LIMIT_MAX` | `10` | 창당 로그인 시도 횟수 (IP + 이메일 기준) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | (빈 값) | Phase 2 예약 |
 | `MONGODB_URI` | `mongodb://localhost:27017/jFolio` | MongoDB 연결 |
 | `MONGODB_DB` | (URI에서 파생) | DB 이름 재정의 |
 | `STOCK_COLLECTION_INTERVAL_SECONDS` | `60` | 주식/ETF 수집 주기 |
@@ -123,8 +172,8 @@ curl -s http://127.0.0.1:3001/api/v1/dashboard
 | `COLLECTION_SCHEDULER_ENABLED` | `true` | API 기동 시 스케줄러 시작 |
 | `HOURLY_SNAPSHOT_ENABLED` / `DAILY_SNAPSHOT_ENABLED` | `true` | 스냅샷 생성 |
 | `STABLECOIN_USD_PEGS` | `USDT,USDC,BUSD,DAI,TUSD,FDUSD` | USD 1:1 페그로 취급할 스테이블코인 |
-| `API_BASE_URL` (web) | `http://127.0.0.1:3001/api/v1` | 웹이 호출할 API 주소 |
-| `API_AUTH_TOKEN` (web) | (빈 값) | 웹 서버가 API 호출 시 사용할 토큰 |
+| `API_BASE_URL` (web) | `http://127.0.0.1:3001/api/v1` | 웹이 호출할 API 주소 (`AUTH_URL` 파생 기준) |
+| `API_AUTH_URL` (web) | `API_BASE_URL` 에서 파생 | 인증 API 주소 재정의 (기본 `.../api/auth`) |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Seoul` | 웹 표시 시간대 |
 
 ---
@@ -140,6 +189,7 @@ curl -s http://127.0.0.1:3001/api/v1/dashboard
 | `yarn typecheck` | 전체 워크스페이스 타입체크 |
 | `yarn lint` | ESLint (`.ts`, `.tsx`) |
 | `yarn seed` | 기준 상품/데모 포트폴리오 시드 + 1회 수집 |
+| `yarn create-user` | 로그인 계정 생성 (관리자/CLI 전용) |
 | `yarn collect:once` | 1회 수집 실행 |
 
 ---
@@ -213,8 +263,12 @@ UI는 데이터 상태를 `정상 / 지연 / 오류 / 데이터없음 / 평가�
    시그널 이벤트 `ruleId+deduplicationKey`.
 6. **시그널 발생 규칙**: 조건이 false→true 로 바뀌는 순간에만 발생, 쿨다운
    경과 시 새 에피소드로 재발생.
-7. **인증**: `API_AUTH_TOKEN` 이 있을 때만 활성화. `/health` 와
-   `/api/v1/system/health` 는 인증 예외.
+7. **인증**: Phase 1은 이메일/비밀번호 + 서버 세션. 브라우저는 HttpOnly
+   세션 쿠키(`jfolio.sid`)로 인증하고, `/api/v1` 은 세션 **또는** 선택적
+   `API_AUTH_TOKEN`(서비스 자격 증명)을 허용합니다. 로그인 시 세션 ID를
+   재발급하고, 로그아웃 시 서버 세션을 파괴하며, 세션 쿠키 변경 API는
+   double-submit CSRF 토큰을 검증합니다. 로그인은 IP + 이메일 기준으로
+   rate limit 되고, `/health` 와 `/api/v1/system/health` 는 인증 예외입니다.
 8. **최신 시세(`latest_quotes`)**: 자산별 최신 시세는 별도 컬렉션에 물질화되어
    목록/상세 API가 함께 반환합니다. 수집 시 매 관측마다 갱신되며(동일 시각 중복도
    `receivedAt` 갱신), 저장된 최신값보다 오래된 시세가 뒤늦게 들어와도 최신값을
@@ -238,7 +292,11 @@ API 계약(인증/검증/CRUD), 공급자 URL 구성 등은 실제 단위 테스
 
 ## 10. 알려진 한계
 
-- 인증은 단일 공유 토큰 기반이며 사용자별 권한/멀티테넌시는 미구현입니다.
+- Phase 1 인증은 로컬 계정/세션까지만 구현되어 있습니다. Google SSO, 회원가입,
+  비밀번호 재설정, 이메일 인증은 없습니다.
+- 인증된 사용자 개념은 도입되었지만 포트폴리오/거래 데이터는 여전히
+  `DEFAULT_USER_ID` 기준의 단일 공유 데이터입니다. 사용자별 데이터 격리와
+  역할 기반 권한 검사는 후속 작업입니다.
 - 실데이터 공급자는 무료 공개 API에 의존하므로 요율 제한/일시 장애에 영향을
   받을 수 있습니다 (장애는 기록되고 `provider_states` 로 노출됨).
 - BOND / COMMODITY 자산군은 타입/스키마만 정의되어 있고 기본 공급자가 없습니다.
@@ -305,8 +363,29 @@ cp deploy/production.app.env.example deploy/production.app.env  # 런타임 환�
 | `NEXT_PUBLIC_*` | 빌드 시 인라인되는 값 (예: `NEXT_PUBLIC_TIME_ZONE`) |
 
 `deploy/production.app.env` 는 서버의 `<DEPLOY_PATH>/.env` 로 업로드되어 PM2가
-두 프로세스에 주입합니다. **`API_AUTH_TOKEN` 은 반드시 긴 랜덤 값으로** 설정하고,
-웹이 API를 호출할 때 같은 토큰을 사용하도록 `API_BASE_URL` 과 함께 관리하세요.
+두 프로세스에 주입합니다. 운영에서는 다음을 반드시 설정하세요.
+
+- `SESSION_SECRET`: 32자 이상의 랜덤 값 (`openssl rand -hex 32`). 미설정/짧으면
+  API가 기동하지 않습니다.
+- `SESSION_STORE=mongo`: 운영에서 `memory` 는 거부됩니다.
+- `API_AUTH_TOKEN`: 긴 랜덤 값. Next.js 서버가 API를 호출할 때 사용하므로
+  `API_BASE_URL` 과 함께 관리합니다. 브라우저 로그인은 이 토큰이 아니라 세션
+  쿠키를 사용합니다.
+- HTTPS 종료 지점에 맞춰 `SESSION_COOKIE_SECURE` / `SESSION_TRUST_PROXY` 를
+  설정합니다 (예제 기본값은 둘 다 활성).
+
+서버에 계정이 없으면 배포 후 관리자 계정을 한 번 생성합니다. `SESSION_SECRET`
+등은 서버의 `<DEPLOY_PATH>/.env` 에서 로드됩니다.
+
+```bash
+# 서버에서
+cd <DEPLOY_PATH>
+CREATE_USER_PASSWORD='...' node apps/api/dist/cli/create-user.js \
+  --email you@example.com --name "You"
+```
+
+`yarn create-user` 는 개발 환경용이며, 빌드 산출물을 사용하는 운영 서버에서는
+위와 같이 `dist/cli/create-user.js` 를 직접 실행합니다.
 
 ### 12.3 배포
 
@@ -339,6 +418,8 @@ pm2 logs jfolio-web          # 웹 로그
 pm2 restart jfolio-api
 ```
 
-문제 발생 시: API 기동 실패는 MongoDB 연결(`MONGODB_URI`)과
-`pm2 logs jfolio-api` 를, 웹 데이터 미표시는 `API_BASE_URL`/`API_AUTH_TOKEN`
-일치 여부를 확인하세요.
+문제 발생 시: API 기동 실패는 MongoDB 연결(`MONGODB_URI`), `SESSION_SECRET`
+(32자 이상), `SESSION_STORE=mongo` 와 `pm2 logs jfolio-api` 를 확인하세요. 웹
+데이터 미표시는 `API_BASE_URL`/`API_AUTH_TOKEN` 일치 여부를, 로그인 직후
+`/login` 으로 되돌아가는 경우 HTTPS 환경의 `SESSION_COOKIE_SECURE`/
+`SESSION_TRUST_PROXY` 와 쿠키 이름 일치 여부를 확인하세요.

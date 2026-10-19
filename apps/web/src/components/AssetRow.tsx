@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -47,7 +49,7 @@ export function AssetRow({ instrument }: { instrument: Instrument }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/assets/${instrument.instrumentId}`, {
+      const res = await apiFetch(`/api/assets/${instrument.instrumentId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -96,7 +98,7 @@ export function AssetRow({ instrument }: { instrument: Instrument }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/assets/${instrument.instrumentId}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/assets/${instrument.instrumentId}`, { method: "DELETE" });
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as
           | { error?: { message?: string } }

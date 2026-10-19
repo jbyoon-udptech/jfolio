@@ -1,3 +1,4 @@
+import type { UserRepository } from "../users/user.repository";
 import type {
   CollectionJob,
   DataInterval,
@@ -150,6 +151,7 @@ export interface ProviderStateRepository {
 }
 
 export interface Repositories {
+  users: UserRepository;
   instruments: InstrumentRepository;
   quotes: QuoteRepository;
   fxRates: FxRateRepository;

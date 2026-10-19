@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Portfolio } from "@/lib/types";
@@ -17,7 +19,7 @@ export function PortfolioRowActions({ portfolio }: { portfolio: Portfolio }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/portfolios/${portfolio.portfolioId}`, {
+      const res = await apiFetch(`/api/portfolios/${portfolio.portfolioId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

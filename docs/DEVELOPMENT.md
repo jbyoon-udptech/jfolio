@@ -87,6 +87,7 @@ const portfolio = await createPortfolio(container, "KRW");
 - 시그널 발생 로직은 `apps/api/test/signals.test.ts`.
 - 이력/스냅샷은 `apps/api/test/history.test.ts`.
 - API 계약(인증/검증/CRUD/대시보드)은 `apps/api/test/api.test.ts`.
+- Phase 1 로그인/세션/CSRF/rate limit은 `apps/api/test/auth.test.ts` (TEST-001~012).
 - 공급자 URL 구성/페그는 `apps/api/test/providers.test.ts`, `fx.test.ts`.
 - 웹 표시 포맷/상태는 `apps/web/test/format.test.ts`.
 
@@ -146,6 +147,13 @@ yarn build
   기준 평가금액이 불가하면 `null` 입니다.
 - **웹 변경 요청**: 클라이언트는 동일 출처 Next 라우트 핸들러로 POST 하고,
   핸들러가 서버 사이드에서 API를 호출합니다(CORS/토큰 노출 회피).
+- **인증/세션**: 브라우저는 API가 발급한 HttpOnly 세션 쿠키를 사용하고,
+  Next.js의 `/api/auth/*` 프록시가 `Set-Cookie`를 중계합니다. 변경 요청은
+  `apiFetch`가 `jfolio.csrf` 쿠키를 `x-csrf-token` 헤더로 보내고, Next 라우트의
+  `guardMutation`과 API의 `requireCsrf`가 각각 검증합니다. 테스트는
+  `AUTH_REQUIRED=false`(레거시 계약 테스트) 또는 auth fixture
+  (`AUTH_REQUIRED=true`, `SESSION_STORE=memory`, `AUTH_BCRYPT_ROUNDS=4`)를
+  사용합니다.
 
 자세한 설계 가정과 열린 결정은
 [`IMPLEMENTATION_REPORT.md`](./IMPLEMENTATION_REPORT.md) 를 참고하세요.
@@ -158,4 +166,7 @@ yarn build
 | 대시보드가 `UNAVAILABLE` | 해당 자산 시세/환율 수집 여부, `/api/v1/system/providers` |
 | 시세가 안 들어옴 | 외부 네트워크/요율 제한, `provider_states.lastError` |
 | 웹에서 데이터 안 보임 | `API_BASE_URL`, `API_AUTH_TOKEN` 일치 여부 |
+| 로그인 후 다시 `/login` 으로 감 | `SESSION_SECRET`, 쿠키 이름(`SESSION_COOKIE_NAME`/`AUTH_CSRF_COOKIE_NAME`) 일치, HTTPS에서 `SESSION_COOKIE_SECURE`/`SESSION_TRUST_PROXY` 확인 |
+| `401`/`403` (변경 요청) | 로그인 세션 존재 여부, `jfolio.csrf` 쿠키와 `x-csrf-token` 헤더 일치 여부 |
+| API 기동 시 세션 설정 오류 | `SESSION_SECRET` 32자 이상, 운영에서 `SESSION_STORE=mongo` |
 | 테스트가 실패 | `FIXED_NOW` 기준 시각 사용, mock 공급자 여부 |

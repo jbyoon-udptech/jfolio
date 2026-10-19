@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AssetFields, EMPTY_ASSET_DRAFT, type AssetDraft } from "@/components/AssetFields";
@@ -34,7 +36,7 @@ export function AssetForm() {
         isActive: draft.isActive,
         providers: parseProviders(draft.providers),
       };
-      const res = await fetch("/api/assets", {
+      const res = await apiFetch("/api/assets", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

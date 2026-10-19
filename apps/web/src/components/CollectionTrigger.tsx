@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -15,7 +17,7 @@ export function CollectionTrigger() {
     setMessage(null);
     setError(null);
     try {
-      const res = await fetch("/api/system/collection", {
+      const res = await apiFetch("/api/system/collection", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({}),

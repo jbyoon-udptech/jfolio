@@ -2,7 +2,14 @@ import cors from "cors";
 import express, { type Express } from "express";
 import type { AppConfig } from "../config";
 import type { Container } from "../container";
-import { createAuthMiddleware } from "./auth";
+import {
+  attachSessionUser,
+  ensureCsrfToken,
+  requireAuth,
+  requireCsrf,
+} from "../auth/auth.middleware";
+import { createSessionMiddleware } from "../auth/session";
+import { createAuthRouter } from "./auth-routes";
 import { errorHandler, notFoundHandler } from "./middleware";
 import { createApiRouter } from "./routes";
 
@@ -14,6 +21,11 @@ export function createApp(container: Container, config: AppConfig = container.co
   const app = express();
 
   app.disable("x-powered-by");
+  if (config.auth.session.trustProxy) {
+    // Only enable when the API is reachable exclusively through a trusted
+    // reverse proxy (Next.js); otherwise clients could spoof X-Forwarded-*.
+    app.set("trust proxy", true);
+  }
   app.use(cors());
   app.use(express.json({ limit: "1mb" }));
 
@@ -22,10 +34,25 @@ export function createApp(container: Container, config: AppConfig = container.co
     res.json({ status: "ok", service: "@jfolio/api", timestamp: new Date().toISOString() });
   });
 
-  // Versioned API. Auth is mounted inside the router so `req.path` is relative
-  // to the base path and health routes stay exempt.
+  const authEnabled =
+    config.auth.required || config.auth.localEnabled || config.auth.googleEnabled;
+
+  if (authEnabled) {
+    app.use(createSessionMiddleware(config));
+    app.use(attachSessionUser(container.repos.users, config));
+    app.use(ensureCsrfToken(config));
+    app.use("/api/auth", createAuthRouter(container, config));
+  }
+
+  // Versioned API. The API token remains valid as a trusted service
+  // credential; browsers authenticate with the server-side session.
   const apiRouter = createApiRouter(container);
-  app.use(config.api.basePath, createAuthMiddleware(config.api.authToken), apiRouter);
+  app.use(
+    config.api.basePath,
+    requireAuth(config),
+    requireCsrf(config),
+    apiRouter,
+  );
 
   app.use(notFoundHandler);
   app.use(errorHandler);

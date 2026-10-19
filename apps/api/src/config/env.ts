@@ -26,6 +26,37 @@ function str(value: string | undefined, fallback: string): string {
 }
 
 export type ProviderMode = "live" | "mock";
+export type SessionStoreMode = "memory" | "mongo";
+export type SameSiteMode = "lax" | "strict" | "none";
+
+export interface AuthConfig {
+  /** When true, every /api/v1 call requires a session or the API token. */
+  required: boolean;
+  localEnabled: boolean;
+  /** Reserved for Phase 2. No Google routes are implemented yet. */
+  googleEnabled: boolean;
+  session: {
+    store: SessionStoreMode;
+    secret: string;
+    cookieName: string;
+    csrfCookieName: string;
+    maxAgeMs: number;
+    secure: boolean;
+    sameSite: SameSiteMode;
+    /** Trust X-Forwarded-Proto from the reverse proxy (Next.js). */
+    trustProxy: boolean;
+  };
+  bcryptRounds: number;
+  loginRateLimit: {
+    windowMs: number;
+    max: number;
+  };
+  google: {
+    clientId: string | null;
+    clientSecret: string | null;
+    redirectUri: string | null;
+  };
+}
 
 export interface AppConfig {
   nodeEnv: string;
@@ -67,10 +98,64 @@ export interface AppConfig {
      */
     stablecoinPegs: string[];
   };
+  auth: AuthConfig;
+}
+
+function parseSameSite(value: string | undefined, fallback: SameSiteMode): SameSiteMode {
+  const normalized = (value ?? "").toLowerCase();
+  return normalized === "lax" || normalized === "strict" || normalized === "none"
+    ? normalized
+    : fallback;
+}
+
+function sessionSecure(
+  value: string | undefined,
+  nodeEnv: string,
+  sameSite: SameSiteMode,
+): boolean {
+  if (value === "auto") return nodeEnv === "production";
+  const secure = bool(value, nodeEnv === "production");
+  // Browsers reject SameSite=None cookies that are not Secure.
+  if (sameSite === "none" && !secure) {
+    throw new Error("SESSION_COOKIE_SAMESITE=none requires SESSION_COOKIE_SECURE=true");
+  }
+  return secure;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const nodeEnv = str(env.NODE_ENV, "development");
+  const authRequired = bool(env.AUTH_REQUIRED, nodeEnv !== "test");
+  const localEnabled = bool(env.AUTH_LOCAL_ENABLED, true);
+  const googleEnabled = bool(env.AUTH_GOOGLE_ENABLED, false);
+  const authEnabled = authRequired || localEnabled || googleEnabled;
+
+  const sessionSecret = str(
+    env.SESSION_SECRET,
+    nodeEnv === "production" ? "" : "jfolio-development-session-secret-change-me",
+  );
+  if (authEnabled && !sessionSecret) {
+    throw new Error(
+      "SESSION_SECRET is required when authentication is enabled (set a random value of at least 32 characters)",
+    );
+  }
+  if (nodeEnv === "production" && authEnabled && sessionSecret.length < 32) {
+    throw new Error("SESSION_SECRET must be at least 32 characters in production");
+  }
+
+  const sessionStore = str(
+    env.SESSION_STORE,
+    nodeEnv === "test" ? "memory" : "mongo",
+  ) as SessionStoreMode;
+  if (sessionStore !== "memory" && sessionStore !== "mongo") {
+    throw new Error("SESSION_STORE must be either 'memory' or 'mongo'");
+  }
+  if (nodeEnv === "production" && authEnabled && sessionStore === "memory") {
+    throw new Error("SESSION_STORE=memory is not allowed in production");
+  }
+
+  const sameSite = parseSameSite(env.SESSION_COOKIE_SAMESITE, "lax");
+  const secure = sessionSecure(env.SESSION_COOKIE_SECURE, nodeEnv, sameSite);
+
   return {
     nodeEnv,
     isTest: nodeEnv === "test",
@@ -108,6 +193,33 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         .split(",")
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean),
+    },
+    auth: {
+      required: authRequired,
+      localEnabled,
+      googleEnabled,
+      session: {
+        store: sessionStore,
+        secret: sessionSecret,
+        cookieName: str(env.SESSION_COOKIE_NAME, "jfolio.sid"),
+        csrfCookieName: str(env.AUTH_CSRF_COOKIE_NAME, "jfolio.csrf"),
+        maxAgeMs: num(env.SESSION_MAX_AGE_MS, 7 * 24 * 60 * 60 * 1000),
+        secure,
+        sameSite,
+        // Secure cookies only work behind TLS. Express is normally reached
+        // through the Next.js proxy, so trust its X-Forwarded-Proto header.
+        trustProxy: bool(env.SESSION_TRUST_PROXY, secure),
+      },
+      bcryptRounds: num(env.AUTH_BCRYPT_ROUNDS, 12),
+      loginRateLimit: {
+        windowMs: num(env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
+        max: num(env.AUTH_LOGIN_RATE_LIMIT_MAX, 10),
+      },
+      google: {
+        clientId: env.GOOGLE_CLIENT_ID ? env.GOOGLE_CLIENT_ID : null,
+        clientSecret: env.GOOGLE_CLIENT_SECRET ? env.GOOGLE_CLIENT_SECRET : null,
+        redirectUri: env.GOOGLE_REDIRECT_URI ? env.GOOGLE_REDIRECT_URI : null,
+      },
     },
   };
 }

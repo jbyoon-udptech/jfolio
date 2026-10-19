@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/client-fetch";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Option } from "@/components/TransactionForm";
@@ -53,7 +55,7 @@ export function SignalRuleForm({
     };
 
     try {
-      const res = await fetch("/api/signals/rules", {
+      const res = await apiFetch("/api/signals/rules", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
