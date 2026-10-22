@@ -14,21 +14,41 @@ import { StatusBadge } from "@/components/StatusBadge";
 
 type SortKey =
   | "name"
-  | "quantity"
   | "price"
   | "marketValueBase"
   | "costBasisBase"
   | "unrealizedPnL"
   | "unrealizedReturn";
 
-const COLUMNS: Array<{ key: SortKey; label: string; num?: boolean }> = [
-  { key: "name", label: "자산" },
-  { key: "quantity", label: "수량", num: true },
-  { key: "price", label: "현재가", num: true },
-  { key: "marketValueBase", label: "평가금액", num: true },
-  { key: "costBasisBase", label: "매입 원가", num: true },
-  { key: "unrealizedPnL", label: "미실현 손익", num: true },
-  { key: "unrealizedReturn", label: "수익률", num: true },
+/**
+ * Each column stacks a primary value over a secondary detail line, which keeps
+ * the position table readable without eleven separate columns.
+ */
+const COLUMNS: Array<{
+  key: SortKey;
+  label: string;
+  num?: boolean;
+  sub?: { key?: SortKey; label: string };
+}> = [
+  { key: "name", label: "자산", sub: { label: "유형" } },
+  {
+    key: "price",
+    label: "현재가(수량)",
+    num: true,
+    sub: { label: "매입평균가" },
+  },
+  {
+    key: "marketValueBase",
+    label: "평가금액",
+    num: true,
+    sub: { key: "costBasisBase", label: "매입 원가" },
+  },
+  {
+    key: "unrealizedPnL",
+    label: "미실현 손익",
+    num: true,
+    sub: { key: "unrealizedReturn", label: "수익률" },
+  },
 ];
 
 /** UI-002: holdings table with search and sortable columns. */
@@ -47,14 +67,17 @@ export function HoldingsTable({
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    // Cash is reported in the separate 현금 잔고 card, so it is not a holding
+    // and must not appear (or be searchable) in this table.
+    const holdings = positions.filter((p) => p.assetType !== "CASH");
     const filtered = needle
-      ? positions.filter(
+      ? holdings.filter(
           (p) =>
             p.name.toLowerCase().includes(needle) ||
             p.symbol.toLowerCase().includes(needle) ||
             p.assetType.toLowerCase().includes(needle),
         )
-      : positions;
+      : holdings;
     const sorted = [...filtered].sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
@@ -77,6 +100,16 @@ export function HoldingsTable({
     }
   }
 
+  /** Header label plus the active sort arrow, as a clickable sort control. */
+  function sortButton(key: SortKey, label: string) {
+    return (
+      <button type="button" onClick={() => toggleSort(key)} title={`${label} 기준 정렬`}>
+        {label}
+        {sortKey === key ? (direction === "asc" ? " ▲" : " ▼") : null}
+      </button>
+    );
+  }
+
   return (
     <div className="card">
       <div className="toolbar">
@@ -88,27 +121,31 @@ export function HoldingsTable({
           style={{ marginLeft: "auto", minWidth: 220 }}
         />
       </div>
-      {positions.length === 0 ? (
-        <div className="empty">보유 자산이 없습니다.</div>
+      {rows.length === 0 ? (
+        <div className="empty">
+          {query.trim() ? "검색 결과가 없습니다." : "보유 자산이 없습니다."}
+        </div>
       ) : (
-        <table>
+        <table className="holdings-table">
           <thead>
             <tr>
-              <th onClick={() => toggleSort("name")}>자산</th>
-              <th>유형</th>
-              {COLUMNS.filter((c) => c.key !== "name").map((column) => (
-                <th
-                  key={column.key}
-                  className={column.num ? "num" : undefined}
-                  onClick={() => toggleSort(column.key)}
-                >
-                  {column.label}
-                  {sortKey === column.key ? (direction === "asc" ? " ▲" : " ▼") : ""}
+              {COLUMNS.map((column) => (
+                <th key={column.key} className={column.num ? "num" : undefined}>
+                  <span className="th-main">
+                    {sortButton(column.key, column.label)}
+                  </span>
+                  <span className="th-sub">
+                    {column.sub?.key
+                      ? sortButton(column.sub.key, column.sub.label)
+                      : column.sub?.label}
+                  </span>
                 </th>
               ))}
               <th className="num">비중</th>
-              <th>시세 기준</th>
-              <th>상태</th>
+              <th>
+                <span className="th-main">시세 기준</span>
+                <span className="th-sub">상태</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -123,41 +160,56 @@ export function HoldingsTable({
                 <tr key={position.instrumentId}>
                   <td>
                     <a href={`/assets/${position.instrumentId}`}>{position.name}</a>
-                    <div className="muted" style={{ fontSize: 11 }}>
-                      {position.symbol}
+                    <div className="cell-sub muted">
+                      {position.symbol} {position.assetType}
                     </div>
                   </td>
-                  <td>{position.assetType}</td>
-                  <td className="num">{formatQuantity(position.quantity)}</td>
                   <td className="num">
                     {position.price === null
                       ? "—"
-                      : formatPrice(position.price, position.priceCurrency)}
+                      : formatPrice(position.price, position.priceCurrency)}{" "}
+                    ({formatQuantity(position.quantity)})
+                    <div className="cell-sub muted">
+                      {formatPrice(
+                        position.costBasisBase !== null && position.quantity > 0
+                          ? position.costBasisBase / position.quantity
+                          : null,
+                        currency,
+                      )}
+                    </div>
                   </td>
                   <td className="num">
                     {position.marketValueBase === null
                       ? "평가 불가"
-                      : formatCurrency(position.marketValueBase, currency)}
-                  </td>
-                  <td className="num">
-                    {position.costBasisBase === null
-                      ? "평가 불가"
-                      : formatCurrency(position.costBasisBase, currency)}
-                  </td>
-                  <td
-                    className={`num ${pnlClass(position.unrealizedPnL)}`}
-                  >
-                    {position.unrealizedPnL === null
-                      ? "평가 불가"
-                      : formatCurrency(position.unrealizedPnL, currency)}
+                      : formatCurrency(position.marketValueBase, currency, {
+                          maximumFractionDigits: 0,
+                        })}
+                    <div className="cell-sub muted">
+                      {position.costBasisBase === null
+                        ? "평가 불가"
+                        : formatCurrency(position.costBasisBase, currency, {
+                            maximumFractionDigits: 0,
+                          })}
+                    </div>
                   </td>
                   <td className={`num ${pnlClass(position.unrealizedPnL)}`}>
-                    {formatPercent(position.unrealizedReturn)}
+                    {position.unrealizedPnL === null
+                      ? "평가 불가"
+                      : formatCurrency(position.unrealizedPnL, currency, {
+                          maximumFractionDigits: 0,
+                        })}
+                    <div className="cell-sub">
+                      {formatPercent(position.unrealizedReturn)}
+                    </div>
                   </td>
                   <td className="num">{formatWeight(weight)}</td>
-                  <td className="muted">{formatDateTime(position.priceTimestamp)}</td>
                   <td>
-                    <StatusBadge status={position.status} />
+                    <div className="muted">
+                      {formatDateTime(position.priceTimestamp)}
+                    </div>
+                    <div className="cell-sub">
+                      <StatusBadge status={position.status} />
+                    </div>
                   </td>
                 </tr>
               );

@@ -104,6 +104,9 @@ There is no CI or pre-commit hook; run lint, typecheck, and tests locally.
 
 ## Deployment
 
+- Do **not** deploy after finishing a code change. Stop at lint / typecheck /
+  tests and report the change; run `yarn build` or `./deploy.sh <target>` only
+  when the user explicitly asks for a deploy.
 - `./deploy.sh production` builds locally, assembles `.deploy/<target>/`, rsyncs
   to the OCI host, and reloads PM2 (`ecosystem.config.cjs`).
 - `./deploy-nginx.sh production` is the one-time/idempotent TLS bootstrap

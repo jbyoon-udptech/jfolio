@@ -311,6 +311,45 @@ th.num {
   text-align: right;
 }
 
+/* Two-line holdings rows: a primary value over a secondary detail line. */
+.holdings-table td {
+  vertical-align: top;
+}
+
+.holdings-table th .th-main,
+.holdings-table th .th-sub {
+  display: block;
+}
+
+.holdings-table th .th-sub {
+  font-weight: 500;
+}
+
+/* Both lines of a row use the same text size; the second line only differs in
+   colour, so values such as 매입평균가 stay as readable as the primary value. */
+.holdings-table .cell-sub {
+  margin-top: 1px;
+  line-height: 1.4;
+}
+
+.holdings-table .badge {
+  font-size: inherit;
+}
+
+.holdings-table th button {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.holdings-table th button:hover {
+  color: var(--text);
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;
