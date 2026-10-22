@@ -5,9 +5,22 @@ import { useState } from "react";
 import type { AuthUser } from "@jfolio/shared";
 import { Nav } from "@/components/Nav";
 import { apiFetch } from "@/lib/client-fetch";
+import { formatDateTime } from "@/lib/format";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+// Injected by `next.config.mjs` at build time (see `env` there).
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
+const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? "";
+// `formatDateTime` pins the time zone, so the server and client render the same
+// label and hydration never drifts.
+const BUILD_LABEL = [
+  APP_VERSION ? `v${APP_VERSION}` : "",
+  BUILD_TIME ? formatDateTime(BUILD_TIME, { seconds: false }) : "",
+]
+  .filter(Boolean)
+  .join(" · ");
 
 /**
  * Left navigation with a collapse toggle. Collapsing keeps the menu visible as a
@@ -140,6 +153,14 @@ export function Sidebar({
               {logoutError}
             </span>
           ) : null}
+        </div>
+      ) : null}
+      {BUILD_LABEL ? (
+        <div
+          className="sidebar-meta"
+          title={BUILD_TIME ? `빌드 시각 ${BUILD_TIME} (UTC)` : undefined}
+        >
+          {BUILD_LABEL}
         </div>
       ) : null}
     </aside>

@@ -547,7 +547,8 @@ a.btn:hover {
   position: absolute;
   left: 14px;
   right: 14px;
-  bottom: 8px;
+  /* Sit above the build-metadata line pinned to the bottom of the sidebar. */
+  bottom: 44px;
   color: var(--up);
   font-size: 11px;
 }
@@ -567,6 +568,23 @@ a.btn:hover {
 }
 
 .sidebar.collapsed .sidebar-user-error {
+  display: none;
+}
+
+/* Version and build instant of the running bundle, pinned under the user card. */
+.sidebar-meta {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar.collapsed .sidebar-meta {
   display: none;
 }
 

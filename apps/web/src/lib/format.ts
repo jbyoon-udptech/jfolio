@@ -86,8 +86,14 @@ function toDate(value: string | Date | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** Local (Asia/Seoul) date-time, e.g. "2026-10-16 21:00:00". */
-export function formatDateTime(value: string | Date | null | undefined): string {
+/**
+ * Local (Asia/Seoul) date-time, e.g. "2026-10-16 21:00:00". Pass
+ * `{ seconds: false }` for the minute-precision form used in compact labels.
+ */
+export function formatDateTime(
+  value: string | Date | null | undefined,
+  { seconds = true }: { seconds?: boolean } = {},
+): string {
   const date = toDate(value);
   if (!date) return EMPTY;
   return new Intl.DateTimeFormat("sv-SE", {
@@ -97,7 +103,7 @@ export function formatDateTime(value: string | Date | null | undefined): string 
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
+    ...(seconds ? { second: "2-digit" as const } : {}),
     hourCycle: "h23",
   }).format(date);
 }

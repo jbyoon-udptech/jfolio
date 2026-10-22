@@ -67,6 +67,9 @@ describe("UI-006 formatting", () => {
 
   it("formats date-times in the configured time zone (Asia/Seoul)", () => {
     expect(formatDateTime("2026-10-16T12:00:00.000Z")).toBe("2026-10-16 21:00:00");
+    expect(
+      formatDateTime("2026-10-16T12:00:00.000Z", { seconds: false }),
+    ).toBe("2026-10-16 21:00");
     expect(formatDate("2026-10-16T12:00:00.000Z")).toBe("2026-10-16");
     expect(formatDateTime(null)).toBe(EMPTY);
     expect(formatDateTime("not-a-date")).toBe(EMPTY);
