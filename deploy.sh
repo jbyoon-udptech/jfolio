@@ -122,6 +122,9 @@ fi
 
 [[ -f "$REPO_ROOT/apps/api/dist/index.js" ]] || die "apps/api/dist/index.js not found; run a build first"
 [[ -d "$REPO_ROOT/apps/web/.next" ]] || die "apps/web/.next not found; run a build first"
+# `next dev` and `next build` share apps/web/.next; a dev tree has no BUILD_ID
+# and the deployed server crash-loops with "Could not find a production build".
+[[ -f "$REPO_ROOT/apps/web/.next/BUILD_ID" ]] || die "apps/web/.next has no BUILD_ID (looks like a 'next dev' tree); run a full build (omit --skip-build)"
 if [[ $RUN_SEED -eq 1 && ! -f "$REPO_ROOT/apps/api/dist/cli/seed.js" ]]; then
   die "--seed requires apps/api/dist/cli/seed.js; run a full build (omit --skip-build)"
 fi

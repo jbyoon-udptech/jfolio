@@ -324,7 +324,8 @@ API/웹을 (재)기동합니다.
 
 ```
 개발 PC: yarn build → .deploy/<target>/ (release) ──rsync──▶ OCI: <DEPLOY_PATH>
-                                                              └─ PM2: jfolio-api(3001) + jfolio-web(3000)
+                                                              ├─ nginx: 80 → 443 (TLS) → 127.0.0.1:3000
+                                                              ├─ PM2: jfolio-web(127.0.0.1:3000) + jfolio-api(127.0.0.1:3001)
                                                               └─ MongoDB(로컬 mongod)
 ```
 
@@ -336,10 +337,41 @@ API/웹을 (재)기동합니다.
   (권한 문제 시 `sudo npm install -g pm2`).
 - 부팅 시 자동 시작을 원하면 서버에서 1회:
   `pm2 startup` (안내되는 명령 실행) → `pm2 save`.
-- OCI 보안 목록/방화벽에서 웹 포트(기본 `3000`)를 엽니다. API(3001)는
-  `127.0.0.1` 에만 바인딩되므로 열지 않습니다.
-- (선택) 80/443으로 서비스하려면 nginx를 앞단에 두고 `proxy_pass` 로
-  `http://127.0.0.1:3000` 을 연결합니다.
+- nginx(80/443)를 앞단에 두고 Next.js는 `127.0.0.1:3000` 에만 바인딩합니다.
+  API(3001)는 원래 loopback 전용이므로 열지 않습니다.
+- OCI 보안 목록/방화벽에서 **80/443** 만 엽니다. 웹 포트(3000)는 nginx가
+  프록시하는 내부 포트이므로 닫습니다.
+
+#### TLS (nginx + Let's Encrypt)
+
+운영 세션/CSRF 쿠키는 `Secure` 로 발급됩니다. 평문 HTTP로 접속하면 브라우저가
+쿠키를 저장하지 않아 **로그인이 항상 `403 A valid CSRF token is required`**
+로 실패합니다(Express 세션 쿠키도 HTTPS가 아니면 발급되지 않음). 따라서
+운영은 반드시 HTTPS여야 합니다.
+
+1. 도메인의 A 레코드를 인스턴스 공인 IP로 설정합니다.
+2. `deploy/production.env` 에 값을 채웁니다.
+
+   ```bash
+   NGINX_DOMAIN=jfolio.example.com
+   NGINX_ACME_EMAIL=you@example.com
+   ```
+
+3. 개발 PC에서 한 번 실행합니다(멱등 — 재실행해도 안전).
+
+   ```bash
+   ./deploy-nginx.sh production
+   ```
+
+   이 스크립트는 nginx/certbot 설치 → ACME webroot용 HTTP vhost →
+   `certbot certonly --webroot` 인증서 발급 → HTTPS 리버스 프록시
+   (`deploy/nginx/jfolio.conf.template`) 설치/리로드 → HTTPS 응답과
+   `Secure` 쿠키 발급 검증까지 수행합니다. 인증서 갱신은 certbot의 systemd
+   타이머가 처리하며 `--deploy-hook` 으로 nginx를 리로드합니다.
+
+4. `./deploy.sh production --skip-build` 로 재배포해 Next.js를 loopback에
+   바인딩한 뒤 `https://<도메인>` 으로 접속합니다.
+
 
 ### 12.2 개발 PC 준비
 
@@ -359,7 +391,9 @@ cp deploy/production.app.env.example deploy/production.app.env  # 런타임 환�
 | `DEPLOY_SSH_KEY` | 개인키 경로 (`~` 확장) |
 | `DEPLOY_PATH` | 서버 릴리즈 디렉터리 (없으면 생성) |
 | `DEPLOY_APP_ENV_FILE` | 업로드할 앱 환경 파일 (기본 `deploy/<target>.app.env`) |
-| `DEPLOY_API_PORT` / `DEPLOY_WEB_PORT` | 배포 후 헬스체크 포트 |
+| `DEPLOY_API_PORT` / `DEPLOY_WEB_PORT` | 배포 후 헬스체크 포트 (nginx가 `DEPLOY_WEB_PORT` 로 프록시) |
+| `NGINX_DOMAIN` | TLS 인증서를 발급할 공인 FQDN (`./deploy-nginx.sh`) |
+| `NGINX_ACME_EMAIL` | Let's Encrypt 연락 이메일 |
 | `NEXT_PUBLIC_*` | 빌드 시 인라인되는 값 (예: `NEXT_PUBLIC_TIME_ZONE`) |
 
 `deploy/production.app.env` 는 서버의 `<DEPLOY_PATH>/.env` 로 업로드되어 PM2가
@@ -372,7 +406,8 @@ cp deploy/production.app.env.example deploy/production.app.env  # 런타임 환�
   `API_BASE_URL` 과 함께 관리합니다. 브라우저 로그인은 이 토큰이 아니라 세션
   쿠키를 사용합니다.
 - HTTPS 종료 지점에 맞춰 `SESSION_COOKIE_SECURE` / `SESSION_TRUST_PROXY` 를
-  설정합니다 (예제 기본값은 둘 다 활성).
+  설정합니다. nginx가 `X-Forwarded-Proto: https` 를 넘기므로 둘 다 `true` 가
+  기본값이며, 이 조합이 아니면 로그인이 CSRF 오류로 실패합니다.
 
 서버에 계정이 없으면 배포 후 관리자 계정을 한 번 생성합니다. `SESSION_SECRET`
 등은 서버의 `<DEPLOY_PATH>/.env` 에서 로드됩니다.
@@ -420,6 +455,19 @@ pm2 restart jfolio-api
 
 문제 발생 시: API 기동 실패는 MongoDB 연결(`MONGODB_URI`), `SESSION_SECRET`
 (32자 이상), `SESSION_STORE=mongo` 와 `pm2 logs jfolio-api` 를 확인하세요. 웹
-데이터 미표시는 `API_BASE_URL`/`API_AUTH_TOKEN` 일치 여부를, 로그인 직후
-`/login` 으로 되돌아가는 경우 HTTPS 환경의 `SESSION_COOKIE_SECURE`/
-`SESSION_TRUST_PROXY` 와 쿠키 이름 일치 여부를 확인하세요.
+데이터 미표시는 `API_BASE_URL`/`API_AUTH_TOKEN` 일치 여부를 확인합니다.
+
+로그인 직후 `/login` 으로 되돌아가거나 `403 A valid CSRF token is required`
+가 뜨면 거의 항상 **HTTPS가 아닌 접속**이 원인입니다. 운영 쿠키는 `Secure`
+라서 평문 HTTP에서는 브라우저가 저장하지 않고, Express도 HTTPS가 아닌
+요청에는 세션 쿠키를 내려주지 않습니다. 확인 순서:
+
+```bash
+# 서버에서 쿠키 속성 확인 — Secure 가 보이고 sid 도 함께 내려와야 정상
+curl -sD - -o /dev/null http://127.0.0.1:3000/api/auth/csrf | grep -i set-cookie
+```
+
+- `Secure` 가 없고 `sid` 만 없다면 → `SESSION_COOKIE_SECURE`/`SESSION_TRUST_PROXY`
+- `Secure` 가 있는데 HTTP로 접속 중이라면 → `./deploy-nginx.sh <target>` 로
+  TLS를 구성하고 `https://` 로 접속(HTTPS 환경의 쿠키 이름
+  `SESSION_COOKIE_NAME`/`AUTH_CSRF_COOKIE_NAME` 도 웹과 일치해야 함)

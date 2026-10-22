@@ -1,10 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_REQUIRED, SESSION_COOKIE_NAME } from "@/lib/auth-config";
+import { buildLoginUrl, resolvePublicOrigin } from "@/lib/login-redirect";
 
 /**
  * Fast page-level redirect. This only checks that a session cookie exists;
  * the `(app)` layout makes the authoritative API validation on every request.
  * `/api/auth/*` is excluded so login/logout can reach the proxy unauthenticated.
+ *
+ * The target origin comes from the forwarding headers rather than
+ * `request.nextUrl`, whose host is the server's bind address (`localhost:3000`)
+ * when `next start` is given `-H`.
  */
 export function middleware(request: NextRequest) {
   if (!AUTH_REQUIRED) return NextResponse.next();
@@ -13,11 +18,13 @@ export function middleware(request: NextRequest) {
   if (pathname === "/login") return NextResponse.next();
   if (request.cookies.has(SESSION_COOKIE_NAME)) return NextResponse.next();
 
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/login";
-  loginUrl.search = "";
-  if (pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${search}`);
-  return NextResponse.redirect(loginUrl);
+  const origin = resolvePublicOrigin(
+    request.headers.get("x-forwarded-proto"),
+    request.headers.get("x-forwarded-host"),
+    request.headers.get("host"),
+    request.nextUrl.origin,
+  );
+  return NextResponse.redirect(buildLoginUrl(origin, pathname, search));
 }
 
 export const config = {

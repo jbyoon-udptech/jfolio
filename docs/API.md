@@ -52,6 +52,12 @@ Google SSO는 Phase 2 예약입니다.
 `SESSION_STORE=memory` 는 거부됩니다. 로그아웃과 세션 만료 시 서버 세션이
 무효화됩니다.
 
+운영에서는 두 쿠키 모두 `Secure` 입니다. 평문 HTTP로 접속하면 브라우저가
+쿠키를 저장하지 않고 Express도 세션 쿠키를 발급하지 않으므로, 로그인은 항상
+`403 FORBIDDEN` `A valid CSRF token is required` 로 실패합니다. TLS 종료는
+nginx(`./deploy-nginx.sh`)가 담당하고 `X-Forwarded-Proto: https` 를 API까지
+전달합니다(`SESSION_TRUST_PROXY=true`).
+
 ### CSRF (double-submit)
 
 세션 쿠키를 사용하는 **변경 요청**(`POST`/`PUT`/`PATCH`/`DELETE`)은 다음을

@@ -168,5 +168,6 @@ yarn build
 | 웹에서 데이터 안 보임 | `API_BASE_URL`, `API_AUTH_TOKEN` 일치 여부 |
 | 로그인 후 다시 `/login` 으로 감 | `SESSION_SECRET`, 쿠키 이름(`SESSION_COOKIE_NAME`/`AUTH_CSRF_COOKIE_NAME`) 일치, HTTPS에서 `SESSION_COOKIE_SECURE`/`SESSION_TRUST_PROXY` 확인 |
 | `401`/`403` (변경 요청) | 로그인 세션 존재 여부, `jfolio.csrf` 쿠키와 `x-csrf-token` 헤더 일치 여부 |
+| 로그인 시 `403 A valid CSRF token is required` | HTTPS 접속 여부. 운영 쿠키는 `Secure` 라서 평문 HTTP에서는 저장되지 않고 세션 쿠키도 발급되지 않음 → `./deploy-nginx.sh <target>` |
 | API 기동 시 세션 설정 오류 | `SESSION_SECRET` 32자 이상, 운영에서 `SESSION_STORE=mongo` |
 | 테스트가 실패 | `FIXED_NOW` 기준 시각 사용, mock 공급자 여부 |

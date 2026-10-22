@@ -33,7 +33,9 @@ module.exports = {
       name: "jfolio-web",
       cwd: path.join(root, "apps", "web"),
       script: path.join(root, "node_modules", "next", "dist", "bin", "next"),
-      args: `start -p ${process.env.WEB_PORT || 3000}`,
+      // Loopback only: nginx terminates TLS on 443 and proxies to this port.
+      // Run ./deploy-nginx.sh <target> once before exposing the site.
+      args: `start -H 127.0.0.1 -p ${process.env.WEB_PORT || 3000}`,
       interpreter: "node",
       env: appEnv,
       autorestart: true,

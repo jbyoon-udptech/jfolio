@@ -1,0 +1,26 @@
+# =============================================================================
+# jFolio nginx site: HTTP only (pre-certificate bootstrap).
+#
+# Rendered by deploy-nginx.sh and installed as /etc/nginx/sites-available/jfolio
+# before the Let's Encrypt certificate exists. It only serves the ACME webroot
+# challenge and redirects everything else to HTTPS. Once the certificate is
+# issued the script replaces this file with jfolio.conf.template.
+#
+# Placeholders: __DOMAIN__, __ACME_ROOT__
+# =============================================================================
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    # Let's Encrypt webroot challenge (also used by renewals).
+    location /.well-known/acme-challenge/ {
+        root __ACME_ROOT__;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}

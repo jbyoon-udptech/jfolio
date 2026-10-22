@@ -106,6 +106,15 @@ There is no CI or pre-commit hook; run lint, typecheck, and tests locally.
 
 - `./deploy.sh production` builds locally, assembles `.deploy/<target>/`, rsyncs
   to the OCI host, and reloads PM2 (`ecosystem.config.cjs`).
+- `./deploy-nginx.sh production` is the one-time/idempotent TLS bootstrap
+  (nginx + certbot webroot, `deploy/nginx/*.template`). It needs `NGINX_DOMAIN`
+  and `NGINX_ACME_EMAIL` in `deploy/<target>.env`.
+- Production cookies (`jfolio.sid`, `jfolio.csrf`) are `Secure`, so the site
+  must be served over HTTPS. Plain HTTP makes browsers drop them, the API never
+  issues a session cookie, and every login fails with
+  `403 A valid CSRF token is required`. `SESSION_COOKIE_SECURE=false` is only a
+  stop-gap for a deliberately non-TLS deployment.
+- Next.js binds to `127.0.0.1:3000`; only 80/443 should be public.
 - Requires `deploy/<target>.env` (SSH/build-time vars) and
   `deploy/<target>.app.env` (uploaded as `<DEPLOY_PATH>/.env`). Both are
   gitignored; copy the committed `*.example` files and never commit real ones.
