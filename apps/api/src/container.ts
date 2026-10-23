@@ -63,6 +63,6 @@ export function createContainer(
     snapshots: new SnapshotService(repos, valuation),
     collection,
     dashboard: new DashboardService(repos, valuation, now),
-    system: new SystemService(repos, providers),
+    system: new SystemService(repos, providers, config.collection),
   };
 }

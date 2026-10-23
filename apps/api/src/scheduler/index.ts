@@ -1,4 +1,4 @@
-import type { PortfolioSnapshot, SnapshotType } from "@jfolio/shared";
+import type { AssetType, PortfolioSnapshot, SnapshotType } from "@jfolio/shared";
 import type { AppConfig } from "../config";
 import type { CollectionRunOptions, CollectionRunResult } from "../services/collection.service";
 import type { Container } from "../container";
@@ -22,10 +22,22 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export function startScheduler(container: Container, config: AppConfig): SchedulerHandle {
   const timers: NodeJS.Timeout[] = [];
-  let running = false;
+  // Runs are tracked per asset type: timers with the same interval (e.g. all
+  // 600s) fire at the same instant, and a shared flag would let the first one
+  // win while silently dropping the others. A slow tick of the same type is
+  // still skipped so jobs cannot stack up.
+  const runningAssetTypes = new Set<AssetType>();
+  // Full runs and instrument-scoped runs touch arbitrary instruments, so they
+  // conflict with every other run.
+  let exclusiveRunning = false;
 
   const runCollection = async (options?: CollectionRunOptions): Promise<CollectionRunResult> => {
-    if (running) {
+    const claimed = [...new Set(options?.assetTypes ?? [])];
+    const exclusive = !claimed.length || Boolean(options?.instrumentIds?.length);
+    const blocked = exclusive
+      ? exclusiveRunning || runningAssetTypes.size > 0
+      : exclusiveRunning || claimed.some((assetType) => runningAssetTypes.has(assetType));
+    if (blocked) {
       // Skip overlapping runs; a slow provider must not stack up jobs.
       return {
         jobs: [],
@@ -37,11 +49,13 @@ export function startScheduler(container: Container, config: AppConfig): Schedul
         errors: ["collection already running"],
       };
     }
-    running = true;
+    if (exclusive) exclusiveRunning = true;
+    else for (const assetType of claimed) runningAssetTypes.add(assetType);
     try {
       return await container.collection.run(options);
     } finally {
-      running = false;
+      if (exclusive) exclusiveRunning = false;
+      else for (const assetType of claimed) runningAssetTypes.delete(assetType);
     }
   };
 

@@ -3,9 +3,16 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { DEFAULT_BASE_CURRENCY, DEFAULT_TIMEZONE } from "@jfolio/shared";
 
-// Load .env from the repo root if present (apps/api -> ../../.env).
-const rootEnv = resolve(__dirname, "../../../.env");
-if (existsSync(rootEnv)) {
+// Load .env from the repo root if present. The relative depth depends on how
+// this file runs: tsx (dev/CLI) loads apps/api/src/config/env.ts, while the
+// tsup build bundles it into apps/api/dist/index.js.
+const ENV_CANDIDATES = [
+  resolve(__dirname, "../../../../.env"), // source: apps/api/src/config -> repo root
+  resolve(__dirname, "../../../.env"), // bundle: apps/api/dist -> repo root
+  resolve(process.cwd(), "../../.env"), // workspace cwd: apps/api -> repo root
+];
+const rootEnv = ENV_CANDIDATES.find((candidate) => existsSync(candidate));
+if (rootEnv) {
   loadDotenv({ path: rootEnv });
 } else {
   loadDotenv();

@@ -136,3 +136,42 @@ export function formatWeight(value: number | null | undefined): string {
   if (!isFiniteNumber(value)) return EMPTY;
   return `${formatNumber(value, { maximumFractionDigits: 2 })}%`;
 }
+
+/** Human duration for a period in seconds, e.g. "10초", "1분", "1시간 30분". */
+export function formatDuration(value: number | null | undefined): string {
+  if (!isFiniteNumber(value) || value < 0) return EMPTY;
+  const totalSeconds = Math.round(value);
+  if (totalSeconds < 60) return `${totalSeconds}초`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    const seconds = totalSeconds % 60;
+    return seconds ? `${totalMinutes}분 ${seconds}초` : `${totalMinutes}분`;
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${hours}시간 ${minutes}분` : `${hours}시간`;
+}
+
+/**
+ * Collection cadence of a provider. Assets are scheduled per asset type, so a
+ * provider covering several types can have more than one period. When the
+ * scheduler is disabled the API only collects on demand.
+ */
+export function formatCollectionInterval(
+  intervals: ReadonlyArray<{ assetType: string; seconds: number }> | null | undefined,
+  schedulerEnabled: boolean,
+): string {
+  if (!schedulerEnabled) return "수동";
+  if (!intervals || intervals.length === 0) return EMPTY;
+  if (intervals.length === 1) {
+    const [only] = intervals;
+    return formatDuration(only?.seconds);
+  }
+  const bySeconds = new Map<number, string[]>();
+  for (const { assetType, seconds } of intervals) {
+    bySeconds.set(seconds, [...(bySeconds.get(seconds) ?? []), assetType]);
+  }
+  return [...bySeconds.entries()]
+    .map(([seconds, assetTypes]) => `${assetTypes.join("·")} ${formatDuration(seconds)}`)
+    .join(" · ");
+}

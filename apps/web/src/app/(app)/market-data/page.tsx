@@ -2,7 +2,7 @@ import { CollectionTrigger } from "@/components/CollectionTrigger";
 import { ApiErrorNotice } from "@/components/Notice";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, safe } from "@/lib/api";
-import { formatDateTime, formatPrice } from "@/lib/format";
+import { formatCollectionInterval, formatDateTime, formatPrice } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +56,7 @@ export default async function MarketDataPage() {
               <tr>
                 <th>공급자</th>
                 <th>자산 유형</th>
+                <th>데이터 수집 주기</th>
                 <th>마지막 실행</th>
                 <th>마지막 성공</th>
                 <th className="num">연속 실패</th>
@@ -73,6 +74,19 @@ export default async function MarketDataPage() {
                     </div>
                   </td>
                   <td className="muted">{provider.assetTypes.join(", ") || "—"}</td>
+                  <td
+                    className="muted"
+                    title={
+                      provider.schedulerEnabled
+                        ? undefined
+                        : "스케줄러가 비활성화되어 수동 수집만 동작합니다."
+                    }
+                  >
+                    {formatCollectionInterval(
+                      provider.collectionIntervals,
+                      provider.schedulerEnabled,
+                    )}
+                  </td>
                   <td className="muted">{formatDateTime(provider.state?.lastRunAt)}</td>
                   <td className="muted">{formatDateTime(provider.state?.lastSuccessAt)}</td>
                   <td className="num">{provider.state?.consecutiveFailures ?? 0}</td>

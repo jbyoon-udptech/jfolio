@@ -637,8 +637,50 @@ describe("8.7 system", () => {
     expect(providers.status).toBe(200);
     expect(providers.body.total).toBeGreaterThan(0);
 
+    const items = providers.body.items as Array<{
+      providerId: string;
+      schedulerEnabled: boolean;
+      collectionIntervals: Array<{ assetType: string; seconds: number }>;
+    }>;
+    const byId = new Map(items.map((p) => [p.providerId, p] as const));
+    // Test config disables the scheduler, so collection is manual only.
+    expect(byId.get("mock")?.schedulerEnabled).toBe(false);
+    // ETF / CASH have no scheduler tick, so only STOCK / CRYPTO / FX are listed.
+    expect(byId.get("mock")?.collectionIntervals).toEqual([
+      { assetType: "STOCK", seconds: 60 },
+      { assetType: "CRYPTO", seconds: 10 },
+      { assetType: "FX", seconds: 60 },
+    ]);
+    expect(byId.get("binance")?.collectionIntervals).toEqual([
+      { assetType: "CRYPTO", seconds: 10 },
+    ]);
+
     const status = await request(app).get(`${BASE}/system/data-status`);
     expect(status.status).toBe(200);
     expect(status.body.status).toBe("NO_DATA");
+  });
+
+  it("reports the configured cadence when the scheduler is enabled", async () => {
+    const { container } = createTestContext(FIXED_NOW, {
+      COLLECTION_SCHEDULER_ENABLED: "true",
+      STOCK_COLLECTION_INTERVAL_SECONDS: "300",
+    });
+    const app = appFor(container);
+
+    const providers = await request(app).get(`${BASE}/system/providers`);
+    expect(providers.status).toBe(200);
+
+    const items = providers.body.items as Array<{
+      providerId: string;
+      schedulerEnabled: boolean;
+      collectionIntervals: Array<{ assetType: string; seconds: number }>;
+    }>;
+    const mock = items.find((p) => p.providerId === "mock");
+    expect(mock?.schedulerEnabled).toBe(true);
+    expect(mock?.collectionIntervals).toEqual([
+      { assetType: "STOCK", seconds: 300 },
+      { assetType: "CRYPTO", seconds: 10 },
+      { assetType: "FX", seconds: 60 },
+    ]);
   });
 });

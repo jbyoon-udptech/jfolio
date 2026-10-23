@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY,
   UNAVAILABLE,
+  formatCollectionInterval,
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatDuration,
   formatNumber,
   formatPercent,
   formatPrice,
@@ -82,6 +84,40 @@ describe("UI-006 formatting", () => {
     // Interpreting the value as local time restores the original instant.
     expect(new Date(local).getTime()).toBe(new Date(iso).getTime());
     expect(toLocalDateTimeInput("not-a-date")).toBe("");
+  });
+});
+
+describe("collection cadence", () => {
+  it("formats a period in seconds as a compact Korean duration", () => {
+    expect(formatDuration(10)).toBe("10초");
+    expect(formatDuration(60)).toBe("1분");
+    expect(formatDuration(90)).toBe("1분 30초");
+    expect(formatDuration(3600)).toBe("1시간");
+    expect(formatDuration(5400)).toBe("1시간 30분");
+    expect(formatDuration(null)).toBe(EMPTY);
+  });
+
+  it("reports on-demand collection when the scheduler is disabled", () => {
+    expect(
+      formatCollectionInterval([{ assetType: "CRYPTO", seconds: 10 }], false),
+    ).toBe("수동");
+  });
+
+  it("shows one period plainly and groups multiple periods by asset type", () => {
+    expect(formatCollectionInterval([{ assetType: "CRYPTO", seconds: 10 }], true)).toBe(
+      "10초",
+    );
+    expect(
+      formatCollectionInterval(
+        [
+          { assetType: "STOCK", seconds: 60 },
+          { assetType: "CRYPTO", seconds: 10 },
+          { assetType: "FX", seconds: 60 },
+        ],
+        true,
+      ),
+    ).toBe("STOCK·FX 1분 · CRYPTO 10초");
+    expect(formatCollectionInterval([], true)).toBe(EMPTY);
   });
 });
 

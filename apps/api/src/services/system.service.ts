@@ -1,13 +1,24 @@
 import type { CollectionJob, DataStatus, ProviderState } from "@jfolio/shared";
+import type { AppConfig } from "../config";
 import type { MarketDataProvider } from "../providers/market-data.provider";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Repositories } from "../repositories/types";
+
+export interface ProviderCollectionInterval {
+  assetType: string;
+  /** Scheduled collection period in seconds. */
+  seconds: number;
+}
 
 export interface ProviderStatusView {
   providerId: string;
   displayName: string;
   assetTypes: string[];
   capabilities: MarketDataProvider["capabilities"];
+  /** False when collection only runs on demand (scheduler disabled). */
+  schedulerEnabled: boolean;
+  /** Cadence of the scheduled runs for this provider's asset types. */
+  collectionIntervals: ProviderCollectionInterval[];
   state: ProviderState | null;
 }
 
@@ -28,6 +39,10 @@ export class SystemService {
   constructor(
     private readonly repos: Repositories,
     private readonly registry: ProviderRegistry,
+    private readonly schedule: Pick<
+      AppConfig["collection"],
+      "schedulerEnabled" | "intervals"
+    >,
   ) {}
 
   async getDataStatus(): Promise<SystemDataStatus> {
@@ -61,11 +76,21 @@ export class SystemService {
   async getProviders(): Promise<ProviderStatusView[]> {
     const states = await this.repos.providerStates.list();
     const byId = new Map(states.map((s) => [s.providerId, s] as const));
+    const intervals: Record<string, number | undefined> = { ...this.schedule.intervals };
     return this.registry.list().map((provider) => ({
       providerId: provider.providerId,
       displayName: provider.displayName,
       assetTypes: provider.assetTypes,
       capabilities: provider.capabilities,
+      schedulerEnabled: this.schedule.schedulerEnabled,
+      // ETF / CASH have no dedicated scheduler tick, so only asset types with a
+      // configured positive period are reported.
+      collectionIntervals: provider.assetTypes.flatMap((assetType) => {
+        const seconds = intervals[assetType];
+        return typeof seconds === "number" && seconds > 0
+          ? [{ assetType, seconds }]
+          : [];
+      }),
       state: byId.get(provider.providerId) ?? null,
     }));
   }

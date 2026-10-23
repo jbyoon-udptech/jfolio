@@ -216,6 +216,10 @@ export interface ProviderStatusView {
   displayName: string;
   assetTypes: string[];
   capabilities: Record<string, boolean>;
+  /** False when collection only runs on demand (scheduler disabled). */
+  schedulerEnabled: boolean;
+  /** Cadence of the scheduled runs for this provider's asset types. */
+  collectionIntervals: Array<{ assetType: string; seconds: number }>;
   state: ProviderState | null;
 }
 
