@@ -1,6 +1,6 @@
 {
   "name": "jfolio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "jFolio - 개인 금융자산 통합 관리 시스템 (market data collection + portfolio valuation + signals)",
   "workspaces": [

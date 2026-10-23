@@ -59,26 +59,28 @@ export default async function AssetsPage({
         {items.length === 0 ? (
           <div className="empty">조건에 맞는 자산이 없습니다.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>종목명</th>
-                <th>코드</th>
-                <th>유형</th>
-                <th>시장</th>
-                <th>통화</th>
-                <th className="num">현재가</th>
-                <th>시세 시각</th>
-                <th>공급자</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((instrument) => (
-                <AssetRow key={instrument.instrumentId} instrument={instrument} />
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll table-scroll-capped table-scroll-actions">
+            <table>
+              <thead>
+                <tr>
+                  <th>종목명</th>
+                  <th>코드</th>
+                  <th>유형</th>
+                  <th>시장</th>
+                  <th>통화</th>
+                  <th className="num">현재가</th>
+                  <th>시세 시각</th>
+                  <th>공급자</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((instrument) => (
+                  <AssetRow key={instrument.instrumentId} instrument={instrument} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

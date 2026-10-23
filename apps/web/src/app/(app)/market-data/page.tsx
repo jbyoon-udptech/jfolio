@@ -108,34 +108,36 @@ export default async function MarketDataPage() {
         {status.recentJobs.length === 0 ? (
           <div className="empty">수집 이력이 없습니다.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>시작</th>
-                <th>공급자</th>
-                <th>자산 유형</th>
-                <th>상태</th>
-                <th className="num">저장</th>
-                <th className="num">실패</th>
-                <th>종료</th>
-              </tr>
-            </thead>
-            <tbody>
-              {status.recentJobs.map((job) => (
-                <tr key={job.jobId}>
-                  <td className="muted">{formatDateTime(job.startedAt)}</td>
-                  <td>{job.providerId}</td>
-                  <td>{job.assetType}</td>
-                  <td>
-                    <StatusBadge status={job.status} />
-                  </td>
-                  <td className="num">{job.insertedCount}</td>
-                  <td className="num">{job.failedCount}</td>
-                  <td className="muted">{formatDateTime(job.finishedAt)}</td>
+          <div className="table-scroll table-scroll-capped table-scroll-compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>시작</th>
+                  <th>공급자</th>
+                  <th>자산 유형</th>
+                  <th>상태</th>
+                  <th className="num">저장</th>
+                  <th className="num">실패</th>
+                  <th>종료</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {status.recentJobs.map((job) => (
+                  <tr key={job.jobId}>
+                    <td className="muted">{formatDateTime(job.startedAt)}</td>
+                    <td>{job.providerId}</td>
+                    <td>{job.assetType}</td>
+                    <td>
+                      <StatusBadge status={job.status} />
+                    </td>
+                    <td className="num">{job.insertedCount}</td>
+                    <td className="num">{job.failedCount}</td>
+                    <td className="muted">{formatDateTime(job.finishedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -144,41 +146,45 @@ export default async function MarketDataPage() {
         {instruments.length === 0 ? (
           <div className="empty">등록된 자산이 없습니다.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>자산</th>
-                <th>유형</th>
-                <th className="num">현재가</th>
-                <th>시세 시각</th>
-                <th>공급자</th>
-              </tr>
-            </thead>
-            <tbody>
-              {instruments.map((instrument) => (
-                <tr key={instrument.instrumentId}>
-                  <td>
-                    <a href={`/assets/${instrument.instrumentId}`}>{instrument.name}</a>
-                    <div className="muted" style={{ fontSize: 11 }}>
-                      {instrument.symbol}
-                    </div>
-                  </td>
-                  <td>{instrument.assetType}</td>
-                  <td className="num">
-                    {instrument.latestQuote
-                      ? formatPrice(instrument.latestQuote.price, instrument.latestQuote.currency)
-                      : "데이터 없음"}
-                  </td>
-                  <td className="muted">{formatDateTime(instrument.latestQuote?.timestamp)}</td>
-                  <td className="muted">
-                    {instrument.latestQuote?.providerId ??
-                      instrument.providers.map((p) => p.providerId).join(", ") ??
-                      "—"}
-                  </td>
+          <div className="table-scroll table-scroll-capped">
+            <table>
+              <thead>
+                <tr>
+                  <th>자산</th>
+                  <th>공급자</th>
+                  <th>유형</th>
+                  <th className="num">현재가</th>
+                  <th>시세 시각</th>
+                  <th>실행 시각</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {instruments.map((instrument) => (
+                  <tr key={instrument.instrumentId}>
+                    <td>
+                      <a href={`/assets/${instrument.instrumentId}`}>{instrument.name}</a>
+                      <div className="muted" style={{ fontSize: 11 }}>
+                        {instrument.symbol}
+                      </div>
+                    </td>
+                    <td className="muted">
+                      {instrument.latestQuote?.providerId ||
+                        instrument.providers.map((p) => p.providerId).join(", ") ||
+                        "—"}
+                    </td>
+                    <td>{instrument.assetType}</td>
+                    <td className="num">
+                      {instrument.latestQuote
+                        ? formatPrice(instrument.latestQuote.price, instrument.latestQuote.currency)
+                        : "데이터 없음"}
+                    </td>
+                    <td className="muted">{formatDateTime(instrument.latestQuote?.timestamp)}</td>
+                    <td className="muted">{formatDateTime(instrument.latestQuote?.receivedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

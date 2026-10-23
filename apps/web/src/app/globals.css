@@ -287,6 +287,48 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
+/* Wide status tables scroll inside their card instead of stretching the page.
+   The sticky header keeps column labels visible while scrolling rows. */
+.table-scroll {
+  max-height: 60vh;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+/* Cap long tables at a fixed number of visible body rows; the sticky header
+   stays in place. Row height varies with the cell content: the latest-quotes
+   table renders a two-line asset cell (name + symbol, 52px), while single-line
+   tables such as recent collection jobs are 41px. */
+.table-scroll-capped {
+  --table-head-height: 36px;
+  --table-row-height: 52px;
+  --table-visible-rows: 10;
+  max-height: calc(var(--table-head-height) + var(--table-row-height) * var(--table-visible-rows));
+}
+
+/* Recent collection jobs show six single-line rows. */
+.table-scroll-capped.table-scroll-compact {
+  --table-row-height: 41px;
+  --table-visible-rows: 6;
+}
+
+/* Rows with action buttons (asset list) are 55px tall. Keep the buttons on one
+   line so the row height does not grow when the table is squeezed. */
+.table-scroll-capped.table-scroll-actions {
+  --table-row-height: 55px;
+}
+
+.table-scroll-capped.table-scroll-actions .toolbar {
+  flex-wrap: nowrap;
+}
+
 th,
 td {
   text-align: left;
