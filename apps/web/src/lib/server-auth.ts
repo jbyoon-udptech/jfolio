@@ -29,10 +29,10 @@ function tokensMatch(expected: string, actual: string): boolean {
  * The API enforces the same rule; checking here as well keeps the protection
  * in place even if the service token later becomes the only API credential.
  */
-export function assertCsrf(request: Request): void {
+export async function assertCsrf(request: Request): Promise<void> {
   if (SAFE_METHODS.has(request.method.toUpperCase())) return;
 
-  const expected = cookies().get(CSRF_COOKIE_NAME)?.value;
+  const expected = (await cookies()).get(CSRF_COOKIE_NAME)?.value;
   const supplied = request.headers.get("x-csrf-token") ?? "";
   if (!expected || !supplied || !tokensMatch(expected, supplied)) {
     throw new AuthGuardError(
@@ -52,7 +52,7 @@ export function assertCsrf(request: Request): void {
  * possible, but an existing session is still validated and CSRF-checked.
  */
 export async function guardMutation(request: Request): Promise<AuthUser | null> {
-  const sessionCookie = cookies().get(SESSION_COOKIE_NAME)?.value;
+  const sessionCookie = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   if (!sessionCookie) {
     if (!AUTH_REQUIRED) return null;
     throw new AuthGuardError(
@@ -72,14 +72,14 @@ export async function guardMutation(request: Request): Promise<AuthUser | null> 
     );
   }
 
-  assertCsrf(request);
+  await assertCsrf(request);
   return me.user;
 }
 
 /** Server-side page guard used by the protected `(app)` layout. */
 export async function currentUser(): Promise<AuthUser | null> {
   if (!AUTH_REQUIRED) return null;
-  if (!cookies().get(SESSION_COOKIE_NAME)?.value) return null;
+  if (!(await cookies()).get(SESSION_COOKIE_NAME)?.value) return null;
   const me = await authApi.me();
   return me.authenticated ? me.user : null;
 }

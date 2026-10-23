@@ -17,12 +17,13 @@ function safeNext(value: string | undefined): string {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: { next?: string };
+  searchParams: Promise<{ next?: string }>;
 }) {
+  const params = await searchParams;
   // If a valid session already exists, skip the login form. An API outage is
   // treated as "not signed in" rather than a hard crash. Avoid calling the API
   // for first-time visitors so no anonymous session is created.
-  const hasSession = Boolean(cookies().get(SESSION_COOKIE_NAME)?.value);
+  const hasSession = Boolean((await cookies()).get(SESSION_COOKIE_NAME)?.value);
   const me = hasSession ? await authApi.me().catch(() => null) : null;
   if (me?.authenticated) redirect("/");
 
@@ -40,7 +41,7 @@ export default async function LoginPage({
         </div>
         <h1 className="login-title">로그인</h1>
         <p className="login-sub">계정으로 로그인하여 포트폴리오를 관리하세요.</p>
-        <LoginForm nextPath={safeNext(searchParams.next)} />
+        <LoginForm nextPath={safeNext(params.next)} />
         <p className="login-help">
           계정은 관리자가 발급합니다. 비밀번호 재설정과 회원가입은 지원하지 않습니다.
         </p>

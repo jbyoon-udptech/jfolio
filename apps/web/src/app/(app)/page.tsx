@@ -20,11 +20,12 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { period?: string; portfolioId?: string };
+  searchParams: Promise<{ period?: string; portfolioId?: string }>;
 }) {
-  const period = normalizePeriod(searchParams.period);
+  const params = await searchParams;
+  const period = normalizePeriod(params.period);
   const dashboardResult = await safe(() =>
-    api.dashboard({ portfolioId: searchParams.portfolioId }),
+    api.dashboard({ portfolioId: params.portfolioId }),
   );
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
@@ -62,7 +63,7 @@ export default async function DashboardPage({
             <PortfolioSelect
               portfolios={portfolioOptions}
               currentId={dashboard.portfolioId}
-              extraQuery={searchParams.period ? `period=${searchParams.period}` : undefined}
+              extraQuery={params.period ? `period=${params.period}` : undefined}
             />
           ) : null}
           <StatusBadge status={dashboard.dataStatus} />
@@ -117,7 +118,7 @@ export default async function DashboardPage({
             {PERIODS.map((option) => (
               <Link
                 key={option}
-                href={`/?period=${option}${searchParams.portfolioId ? `&portfolioId=${searchParams.portfolioId}` : ""}`}
+                href={`/?period=${option}${params.portfolioId ? `&portfolioId=${params.portfolioId}` : ""}`}
                 className={`pill ${option === period ? "active" : ""}`}
               >
                 {option}

@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: { search?: string; assetType?: string };
+  searchParams: Promise<{ search?: string; assetType?: string }>;
 }) {
+  const params = await searchParams;
   const result = await safe(() =>
-    api.instruments({ search: searchParams.search, assetType: searchParams.assetType }),
+    api.instruments({ search: params.search, assetType: params.assetType }),
   );
   if (!result.data) {
     return <ApiErrorNotice error={result.error} />;
@@ -35,9 +36,9 @@ export default async function AssetsPage({
           <input
             name="search"
             placeholder="종목명/코드 검색"
-            defaultValue={searchParams.search ?? ""}
+            defaultValue={params.search ?? ""}
           />
-          <select name="assetType" defaultValue={searchParams.assetType ?? ""}>
+          <select name="assetType" defaultValue={params.assetType ?? ""}>
             <option value="">전체 유형</option>
             {ASSET_TYPES.map((type) => (
               <option key={type} value={type}>

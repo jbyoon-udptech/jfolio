@@ -21,7 +21,7 @@ Yarn 1 workspaces 기반 모노레포입니다.
 jFolio/
 ├── packages/shared   # 도메인 타입, Zod 스키마, 상수, 포맷 유틸 (소스 전용)
 ├── apps/api          # Express + MongoDB 수집/평가/시그널 REST API
-└── apps/web          # Next.js 14 대시보드 (서버 사이드에서 API 호출)
+└── apps/web          # Next.js 16 대시보드 (서버 사이드에서 API 호출)
 ```
 
 데이터 흐름:
@@ -41,7 +41,7 @@ CollectionService ──► market_quotes / latest_quotes / fx_rates
 
 - **API** (`apps/api`): Express, MongoDB native driver, Zod 검증, 인메모리/몽고
   리포지토리 이중 구현, in-process 스케줄러.
-- **Web** (`apps/web`): Next.js 14 App Router. 모든 데이터 조회/변경은 Next.js
+- **Web** (`apps/web`): Next.js 16 App Router. 모든 데이터 조회/변경은 Next.js
   서버에서 API로 프록시하므로 API 토큰이 브라우저 번들에 노출되지 않습니다.
 - **Shared** (`packages/shared`): API와 Web이 동일한 타입/검증 스키마를 공유합니다.
 
@@ -49,7 +49,7 @@ CollectionService ──► market_quotes / latest_quotes / fx_rates
 
 ## 2. 요구 사항
 
-- Node.js **>= 20** (개발/검증 환경: v22.18)
+- Node.js **>= 20.9** (개발/검증 환경: v22.23)
 - Yarn **1.22** (classic)
 - MongoDB **6+** (기본 `mongodb://localhost:27017/jFolio`)
 - 외부 네트워크 접속 (실데이터 공급자 사용 시)
@@ -331,7 +331,7 @@ API/웹을 (재)기동합니다.
 
 ### 12.1 서버 1회 준비 (OCI 인스턴스)
 
-- Node.js **>= 20** 설치.
+- Node.js **>= 20.9** 설치.
 - MongoDB 6+ 설치/기동 (`mongod`). 배포 스크립트는 연결만 사용합니다.
 - PM2는 배포 시 없으면 `npm install -g pm2` 로 자동 설치를 시도합니다
   (권한 문제 시 `sudo npm install -g pm2`).

@@ -1,7 +1,7 @@
 /**
- * Web-side authentication settings shared by the Next.js server, middleware
- * and route handlers. Kept free of Node-only imports so Edge middleware can
- * read the same cookie names and flags.
+ * Web-side authentication settings shared by the Next.js server, proxy
+ * and route handlers. Kept free of Node-only imports so the proxy can read the
+ * same cookie names and flags.
  */
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3001/api/v1";

@@ -11,7 +11,7 @@ import { buildLoginUrl, resolvePublicOrigin } from "@/lib/login-redirect";
  * `request.nextUrl`, whose host is the server's bind address (`localhost:3000`)
  * when `next start` is given `-H`.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!AUTH_REQUIRED) return NextResponse.next();
 
   const { pathname, search } = request.nextUrl;

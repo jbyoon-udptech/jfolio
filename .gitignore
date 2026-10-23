@@ -23,3 +23,6 @@ deploy/*.env
 .idea/
 .vscode/
 *.tsbuildinfo
+
+# Next.js generated types
+next-env.d.ts

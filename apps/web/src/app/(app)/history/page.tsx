@@ -26,25 +26,26 @@ function endOfDayIso(date: string): string {
 export default async function HistoryPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     from?: string;
     to?: string;
     interval?: string;
     baseCurrency?: string;
     asOf?: string;
     portfolioId?: string;
-  };
+  }>;
 }) {
+  const params = await searchParams;
   const today = new Date();
-  const toDate = searchParams.to ?? today.toISOString().slice(0, 10);
+  const toDate = params.to ?? today.toISOString().slice(0, 10);
   const fromDate =
-    searchParams.from ?? new Date(today.getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
-  const interval = searchParams.interval === "hourly" ? "hourly" : "daily";
-  const baseCurrency = searchParams.baseCurrency ?? "KRW";
-  const asOfDate = searchParams.asOf ?? toDate;
+    params.from ?? new Date(today.getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const interval = params.interval === "hourly" ? "hourly" : "daily";
+  const baseCurrency = params.baseCurrency ?? "KRW";
+  const asOfDate = params.asOf ?? toDate;
 
   const dashboardResult = await safe(() =>
-    api.dashboard({ portfolioId: searchParams.portfolioId, baseCurrency }),
+    api.dashboard({ portfolioId: params.portfolioId, baseCurrency }),
   );
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;

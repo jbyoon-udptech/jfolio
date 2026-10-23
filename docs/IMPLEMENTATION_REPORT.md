@@ -26,10 +26,10 @@
 
 | 항목 | 결과 |
 | --- | --- |
-| `yarn test` | **133 tests / 12 files, 전부 통과** |
+| `yarn test` | **148 tests / 14 files, 전부 통과** |
 | `yarn typecheck` | 통과 (shared + api + web) |
 | `yarn lint` | 통과 |
-| `yarn build` | 통과 (API tsup, Web next build 19 routes + middleware) |
+| `yarn build` | 통과 (API tsup, Web next build 19 routes + proxy) |
 | 라이브 E2E | `/health`, `/api/v1/dashboard`, `/system/*` 실제 데이터 반환 |
 
 ---
@@ -63,7 +63,7 @@ curl -s http://127.0.0.1:3001/api/v1/dashboard | jq
 ```
 packages/shared  타입 · Zod 스키마 · 상수 · 포맷 유틸 (단일 출처)
 apps/api         Express + MongoDB + 스케줄러 + CLI (수집/평가/시그널/API)
-apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록시)
+apps/web         Next.js 16 App Router 대시보드 (서버 사이드 API 프록시)
 ```
 
 - **패키지 매니저**: Yarn 1.22 workspaces (PnP 미사용).
@@ -78,7 +78,7 @@ apps/web         Next.js 14 App Router 대시보드 (서버 사이드 API 프록
   `connect-mongo`. 사용자(`users`)와 인증 수단(`user_identities`)을 분리해
   Phase 2 Google identity를 같은 계정에 연결할 수 있습니다. Next.js는
   `/api/auth/*` 동일 출처 프록시로 `Set-Cookie`를 중계하고, 보호 페이지는
-  middleware(빠른 리다이렉트) + `(app)` layout(권한 있는 검증)으로 이중
+  proxy(빠른 리다이렉트) + `(app)` layout(권한 있는 검증)으로 이중
   보호합니다.
 
 상세: [`DEVELOPMENT.md`](./DEVELOPMENT.md), [`DATA_MODEL.md`](./DATA_MODEL.md),
@@ -416,7 +416,7 @@ AAPL(30주), 005930(100주) — 위 수치는 초기 5건 데모 거래 기준 �
 - `apps/web/src/lib/server-auth.ts` — 페이지 세션 확인, mutation 가드, CSRF 검증
 - `apps/web/src/lib/client-fetch.ts` — CSRF 쿠키/헤더 처리 `apiFetch`
 - `apps/web/src/app/api/auth/[...path]/route.ts` — `/api/auth/*` 쿠키 중계 프록시
-- `apps/web/src/middleware.ts` — 미인증 페이지 리다이렉트
+- `apps/web/src/proxy.ts` — 미인증 페이지 리다이렉트
 - `apps/web/src/app/(app)/layout.tsx` — 보호 레이아웃(서버 세션 검증) + 사이드바 사용자
 - `apps/web/src/app/login/page.tsx`, `apps/web/src/components/LoginForm.tsx` — 로그인 UI
 - `apps/web/src/components/Sidebar.tsx` — 사용자 표시/로그아웃

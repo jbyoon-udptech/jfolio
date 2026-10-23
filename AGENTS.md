@@ -1,7 +1,7 @@
 # AGENTS.md
 
 jFolio: personal multi-asset portfolio manager. Yarn 1 workspaces monorepo,
-Node >= 20, TypeScript strict. Product docs and UI strings are Korean; code and
+Node >= 20.9, TypeScript strict. Product docs and UI strings are Korean; code and
 comments are English.
 
 ## Commands (run from the repo root)

@@ -45,9 +45,9 @@ function authHeaders(): Record<string, string> {
  * only authenticate with the service token and could not enforce per-user
  * sessions.
  */
-export function requestCookieHeader(): string {
+export async function requestCookieHeader(): Promise<string> {
   try {
-    return cookies()
+    return (await cookies())
       .getAll()
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join("; ");
@@ -56,10 +56,10 @@ export function requestCookieHeader(): string {
   }
 }
 
-function requestCsrfHeader(method: string): Record<string, string> {
+async function requestCsrfHeader(method: string): Promise<Record<string, string>> {
   if (["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) return {};
   try {
-    const token = cookies().get(CSRF_COOKIE_NAME)?.value;
+    const token = (await cookies()).get(CSRF_COOKIE_NAME)?.value;
     return token ? { "x-csrf-token": token } : {};
   } catch {
     return {};
@@ -79,14 +79,14 @@ async function readApiError(res: Response): Promise<string> {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = init.method ?? "GET";
-  const cookie = requestCookieHeader();
+  const cookie = await requestCookieHeader();
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
       ...authHeaders(),
       ...(cookie ? { cookie } : {}),
-      ...requestCsrfHeader(method),
+      ...(await requestCsrfHeader(method)),
       ...(init.headers ?? {}),
     },
     cache: "no-store",
@@ -98,7 +98,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /** Auth calls always use the browser session, never the service token. */
 async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const cookie = requestCookieHeader();
+  const cookie = await requestCookieHeader();
   const res = await fetch(`${AUTH_URL}${path}`, {
     ...init,
     headers: {

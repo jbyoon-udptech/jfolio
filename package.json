@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"yarn workspace @jfolio/api dev\" \"yarn workspace @jfolio/web dev\"",

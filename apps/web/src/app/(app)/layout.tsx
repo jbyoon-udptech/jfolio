@@ -18,7 +18,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (AUTH_REQUIRED && !user) redirect("/login");
 
   const collapsed =
-    parseSidebarState(cookies().get(SIDEBAR_COOKIE)?.value) === "collapsed";
+    parseSidebarState((await cookies()).get(SIDEBAR_COOKIE)?.value) ===
+    "collapsed";
 
   return (
     <div className="layout">

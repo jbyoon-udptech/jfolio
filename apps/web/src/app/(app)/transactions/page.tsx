@@ -10,15 +10,16 @@ export const dynamic = "force-dynamic";
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: { portfolioId?: string; instrumentId?: string };
+  searchParams: Promise<{ portfolioId?: string; instrumentId?: string }>;
 }) {
+  const params = await searchParams;
   const [portfoliosResult, instrumentsResult, transactionsResult] = await Promise.all([
     safe(() => api.portfolios()),
     safe(() => api.instruments()),
     safe(() =>
       api.transactions({
-        portfolioId: searchParams.portfolioId,
-        instrumentId: searchParams.instrumentId,
+        portfolioId: params.portfolioId,
+        instrumentId: params.instrumentId,
         limit: 200,
       }),
     ),
@@ -31,7 +32,7 @@ export default async function TransactionsPage({
   const portfolios = portfoliosResult.data?.items ?? [];
   const instruments = instrumentsResult.data?.items ?? [];
   const transactions = transactionsResult.data.items;
-  const currentPortfolioId = searchParams.portfolioId ?? "";
+  const currentPortfolioId = params.portfolioId ?? "";
 
   const portfolioOptions: Option[] = portfolios.map((p) => ({
     value: p.portfolioId,
@@ -58,8 +59,8 @@ export default async function TransactionsPage({
             currentId={currentPortfolioId}
             allOptionLabel="전체 포트폴리오"
             extraQuery={
-              searchParams.instrumentId
-                ? `instrumentId=${encodeURIComponent(searchParams.instrumentId)}`
+              params.instrumentId
+                ? `instrumentId=${encodeURIComponent(params.instrumentId)}`
                 : undefined
             }
           />
@@ -70,7 +71,7 @@ export default async function TransactionsPage({
         <TransactionForm
           portfolios={portfolioOptions}
           instruments={instrumentOptions}
-          defaultPortfolioId={searchParams.portfolioId}
+          defaultPortfolioId={params.portfolioId}
         />
       ) : (
         <div className="notice" style={{ marginBottom: 16 }}>

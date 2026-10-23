@@ -15,8 +15,13 @@ import type { Valuation, ValuedPosition } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 /** UI-003: individual asset detail. */
-export default async function AssetDetailPage({ params }: { params: { id: string } }) {
-  const instrumentResult = await safe(() => api.instrument(params.id));
+export default async function AssetDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const instrumentResult = await safe(() => api.instrument(id));
   if (!instrumentResult.data) {
     return <ApiErrorNotice error={instrumentResult.error} />;
   }
@@ -25,10 +30,10 @@ export default async function AssetDetailPage({ params }: { params: { id: string
   const priceCurrency = latest?.currency ?? instrument.currency;
 
   const [quotesResult, portfolioResult, transactionsResult, signalsResult] = await Promise.all([
-    safe(() => api.quotes(params.id, { interval: "1d", limit: 120 })),
+    safe(() => api.quotes(id, { interval: "1d", limit: 120 })),
     safe(() => api.portfolios()),
-    safe(() => api.transactions({ instrumentId: params.id, limit: 50 })),
-    safe(() => api.signalEvents({ instrumentId: params.id })),
+    safe(() => api.transactions({ instrumentId: id, limit: 50 })),
+    safe(() => api.signalEvents({ instrumentId: id })),
   ]);
 
   const quotes = quotesResult.data?.items ?? [];
@@ -44,7 +49,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
       : null;
 
   const position: ValuedPosition | null =
-    valuationResult?.data?.positions.find((p) => p.instrumentId === params.id) ?? null;
+    valuationResult?.data?.positions.find((p) => p.instrumentId === id) ?? null;
   const baseCurrency = valuationResult?.data?.baseCurrency ?? "KRW";
   const transactions = transactionsResult.data?.items ?? [];
   const signals = signalsResult.data?.items ?? [];

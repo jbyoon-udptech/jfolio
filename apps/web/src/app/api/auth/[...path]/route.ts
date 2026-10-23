@@ -24,9 +24,10 @@ const FORWARDED_HEADERS = [
  */
 async function proxy(
   request: Request,
-  { params }: { params: { path: string[] } },
+  { params }: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
-  const path = params.path.map((segment) => encodeURIComponent(segment)).join("/");
+  const { path: segments } = await params;
+  const path = segments.map((segment) => encodeURIComponent(segment)).join("/");
   const incomingUrl = new URL(request.url);
   const target = `${AUTH_URL.replace(/\/$/, "")}/${path}${incomingUrl.search}`;
 
@@ -93,14 +94,14 @@ async function proxy(
 
 export async function GET(
   request: Request,
-  context: { params: { path: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
   return proxy(request, context);
 }
 
 export async function POST(
   request: Request,
-  context: { params: { path: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
   return proxy(request, context);
 }

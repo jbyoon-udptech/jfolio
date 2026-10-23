@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
 export default async function PortfolioPage({
   searchParams,
 }: {
-  searchParams: { portfolioId?: string };
+  searchParams: Promise<{ portfolioId?: string }>;
 }) {
+  const params = await searchParams;
   const dashboardResult = await safe(() =>
-    api.dashboard({ portfolioId: searchParams.portfolioId }),
+    api.dashboard({ portfolioId: params.portfolioId }),
   );
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
