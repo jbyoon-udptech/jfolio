@@ -383,8 +383,10 @@ AAPL(30주), 005930(100주) — 위 수치는 초기 5건 데모 거래 기준 �
 - 테스트: 위 5장 (**133 tests / 12 files**)
 - 문서: `README.md`, `docs/API.md`, `docs/DATA_MODEL.md`,
   `docs/DEVELOPMENT.md`, `docs/IMPLEMENTATION_REPORT.md`, `docs/SPEC.md`
-- 운영: `yarn seed`, `yarn collect:once`, `yarn create-user`,
-  `node apps/api/dist/cli/create-user.js`, `/api/v1/system/*`
+- 운영: `yarn seed`, `yarn collect:once`, `yarn backfill:history`, `yarn backup`,
+  `yarn restore`, `yarn create-user`, `node apps/api/dist/cli/create-user.js`,
+  `node apps/api/dist/cli/backup.js`, `node apps/api/dist/cli/restore.js`,
+  `/api/v1/system/*`
 
 ---
 

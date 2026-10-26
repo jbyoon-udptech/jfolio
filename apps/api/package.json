@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "collect:once": "tsx src/cli/collect-once.ts",
     "backfill:history": "tsx src/cli/backfill.ts",
+    "backup": "tsx src/cli/backup.ts",
+    "restore": "tsx src/cli/restore.ts",
     "create-user": "tsx src/cli/create-user.ts",
     "seed": "tsx src/cli/seed.ts"
   },

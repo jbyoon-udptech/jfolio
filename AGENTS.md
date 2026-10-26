@@ -18,15 +18,18 @@ comments are English.
 | `yarn workspace @jfolio/api test test/financial.test.ts` | One test file |
 | `yarn workspace @jfolio/api test:watch` | Watch mode |
 | `yarn seed` / `yarn collect:once` | Seed DB + one live collection / one collection |
+| `yarn backup` | Logical backup of all non-system MongoDB collections to `backup/` |
+| `yarn restore --dir <backup>` | Restore a logical backup (`--drop` for exact per-collection restore) |
 | `yarn create-user ...` | Create a login account via CLI |
 
 There is no CI or pre-commit hook; run lint, typecheck, and tests locally.
 
 ## Setup and environment gotchas
 
-- MongoDB is required by `yarn dev`, `yarn seed`, and `yarn create-user` (the API
-  connects on startup). Tests need neither MongoDB nor network: they use
-  in-memory repositories, mock providers, and a fixed clock.
+- MongoDB is required by `yarn dev`, `yarn seed`, `yarn create-user`, `yarn backup`,
+  and `yarn restore` (`yarn dev` connects on startup; the CLIs connect directly).
+  Tests need neither MongoDB nor network: they use in-memory repositories, mock
+  providers, and a fixed clock.
 - The API loads the **repo-root `.env`** explicitly (`apps/api/src/config/env.ts`).
   Next.js does **not** read that file. Web-side variables (`API_BASE_URL`,
   `API_AUTH_URL`, `API_AUTH_TOKEN`, `AUTH_REQUIRED`, `SESSION_COOKIE_NAME`,

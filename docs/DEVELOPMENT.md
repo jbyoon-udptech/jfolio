@@ -22,7 +22,7 @@ jFolio/
 │   │   ├── services/             # 비즈니스 로직
 │   │   ├── api/                  # express app, routes, auth, validate, middleware
 │   │   ├── scheduler/            # 주기 수집 + 스냅샷
-│   │   ├── cli/                  # seed, collect-once
+│   │   ├── cli/                  # seed, collect-once, backfill, backup, restore, create-user
 │   │   ├── container.ts          # 의존성 조립
 │   │   └── index.ts              # 진입점
 │   └── test/                     # vitest + supertest
@@ -86,6 +86,8 @@ const portfolio = await createPortfolio(container, "KRW");
 - 금융 계산은 `apps/api/test/financial.test.ts` 에 명시적 수치 기대값으로 검증합니다.
 - 시그널 발생 로직은 `apps/api/test/signals.test.ts`.
 - 이력/스냅샷은 `apps/api/test/history.test.ts`.
+- DB 논리 백업/복원은 `apps/api/test/backup.test.ts`, `restore.test.ts`
+  (인메모리 Mongo 스텁 + 임시 디렉터리).
 - API 계약(인증/검증/CRUD/대시보드)은 `apps/api/test/api.test.ts`.
 - Phase 1 로그인/세션/CSRF/rate limit은 `apps/api/test/auth.test.ts` (TEST-001~012).
 - 공급자 URL 구성/페그는 `apps/api/test/providers.test.ts`, `fx.test.ts`.

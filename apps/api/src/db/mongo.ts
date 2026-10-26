@@ -7,6 +7,8 @@ let db: Db | null = null;
 export interface MongoConnectionOptions {
   uri: string;
   dbName?: string;
+  /** Skip best-effort index creation (e.g. for a read-only dry run). */
+  ensureIndexes?: boolean;
 }
 
 function resolveDbName(uri: string, explicit?: string): string {
@@ -26,7 +28,9 @@ export async function connectMongo(options: MongoConnectionOptions): Promise<Db>
   client = new MongoClient(options.uri, { serverSelectionTimeoutMS: 5000 });
   await client.connect();
   db = client.db(resolveDbName(options.uri, options.dbName));
-  await ensureIndexes(db);
+  if (options.ensureIndexes !== false) {
+    await ensureIndexes(db);
+  }
   return db;
 }
 

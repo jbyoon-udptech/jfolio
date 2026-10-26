@@ -6,6 +6,8 @@ export default defineConfig({
     "src/cli/seed.ts",
     "src/cli/create-user.ts",
     "src/cli/backfill.ts",
+    "src/cli/backup.ts",
+    "src/cli/restore.ts",
   ],
   format: ["cjs"],
   target: "node20",

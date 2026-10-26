@@ -25,6 +25,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "collect:once": "yarn workspace @jfolio/api collect:once",
     "backfill:history": "yarn workspace @jfolio/api backfill:history",
+    "backup": "yarn workspace @jfolio/api backup",
+    "restore": "yarn workspace @jfolio/api restore",
     "create-user": "yarn workspace @jfolio/api create-user",
     "seed": "yarn workspace @jfolio/api seed"
   },

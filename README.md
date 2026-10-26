@@ -218,6 +218,8 @@ yarn backfill:history --instrument ins_abc123 --from 2025-01-01
 | `yarn create-user` | 로그인 계정 생성 (관리자/CLI 전용) |
 | `yarn collect:once` | 1회 수집 실행 |
 | `yarn backfill:history` | 과거 일별 시세/환율 백필 (`--from`, `--to`, `--days`, `--asset-type`, `--instrument`) |
+| `yarn backup` | 현재 DB 전체를 `backup/`에 논리 백업 (`--out`, `--collection`, `--exclude`, `--gzip`) |
+| `yarn restore` | 백업 디렉터리 복원 (`--dir`, `--collection`, `--exclude`, `--drop`, `--dry-run`) |
 
 ---
 
@@ -499,11 +501,80 @@ curl -sD - -o /dev/null http://127.0.0.1:3000/api/auth/csrf | grep -i set-cookie
   TLS를 구성하고 `https://` 로 접속(HTTPS 환경의 쿠키 이름
   `SESSION_COOKIE_NAME`/`AUTH_CSRF_COOKIE_NAME` 도 웹과 일치해야 함)
 
-### 12.4 data backup & restore
+### 12.5 DB 백업/복원
+
+`mongodump` 없이 현재 MongoDB의 모든 컬렉션을 MongoDB Extended JSON으로
+내보냅니다. 기본 출력은 `backup/jfolio-backup-<UTC timestamp>/`이며,
+`backup/`는 `.gitignore`에 포함되어 커밋되지 않습니다.
 
 ```bash
-server $ ssh ubunut@jbnix.retailtrend.net
-server $ mongoexport  --db=jFolio --collection=instruments --out=instruments.json
-# copy to local
-local $ mongoimport  --db=jFolio --collection=instruments --file=instruments.json
+# 개발 PC (repo root)
+yarn backup
+
+# 저장 위치 지정 (상대 경로는 repo root 기준)
+yarn backup --out /mnt/backups/jfolio
+
+# 세션/특정 컬렉션 제외 또는 포함
+yarn backup --exclude sessions
+yarn backup --collection users,instruments,transactions
+
+# 용량 절약 (컬렉션별 .json.gz)
+yarn backup --gzip
 ```
+
+```bash
+# 운영 서버 (빌드 산출물 사용)
+cd <DEPLOY_PATH>
+node apps/api/dist/cli/backup.js --out /mnt/backups/jfolio
+```
+
+결과 디렉터리에는 컬렉션별 `<collection>.json`(또는 `.json.gz`)과
+`manifest.json`이 생성됩니다. `manifest.json`에는 포맷 버전, 생성 시각,
+DB 이름, 컬렉션별 문서 수/파일 크기가 기록되며, 마지막에 기록되므로
+이 파일이 있으면 백업이 완료된 것입니다. 디렉터리는 `0700`, 파일은 `0600`으로
+생성됩니다.
+
+`users`(비밀번호 해시)와 `sessions`가 포함될 수 있으므로 백업 파일을
+안전하게 보관하세요. 세션이 필요 없다면 `--exclude sessions`를 사용합니다.
+
+백업은 논리적 내보내기이며 트랜잭션 스냅샷은 아닙니다. 수집 스케줄러가
+실행 중이면 컬렉션 간 시점이 완전히 일치하지 않을 수 있습니다. 일관된
+스냅샷이 필요하면 수집을 잠시 중지한 뒤 실행하세요.
+
+#### 복원
+
+`yarn backup`으로 만든 디렉터리를 `yarn restore`로 복원합니다. `--dir`은
+`manifest.json`이 있는 디렉터리입니다.
+
+```bash
+# 기본: 기존 문서를 유지하면서 _id 기준 upsert (안전한 병합)
+yarn restore --dir backup/jfolio-backup-...
+
+# 선택한 컬렉션을 삭제한 뒤 백업과 동일하게 복원 (정확한 복원)
+yarn restore --dir backup/jfolio-backup-... --drop
+
+# 특정 컬렉션만 복원 / 미리보기
+yarn restore --dir backup/jfolio-backup-... --collection users,portfolios --drop
+yarn restore --dir backup/jfolio-backup-... --drop --dry-run
+```
+
+- `--drop`을 주면 선택된 컬렉션을 먼저 삭제하므로 백업에 없는 대상 문서도
+  사라집니다. `--drop`이 없으면 `_id` 기준으로 upsert하며, 대상 DB에만 있는
+  문서는 그대로 남습니다.
+- `--collection`/`--exclude`로 대상을 제한할 수 있습니다. `--drop`은 선택된
+  컬렉션에만 적용되며, 백업에 없는 다른 컬렉션은 건드리지 않습니다.
+- 운영 DB에서 `--drop`을 사용할 때는 API/스케줄러를 중지하고, 먼저
+  `--dry-run`으로 대상/파일을 확인하세요. 삭제된 컬렉션의 인덱스는 복원
+  성공 후 CLI가 `ensureIndexes`로 재생성합니다.
+- gzip 백업도 자동으로 풀어서 복원합니다.
+
+```bash
+# 운영 서버 (빌드 산출물 사용)
+cd <DEPLOY_PATH>
+node apps/api/dist/cli/restore.js --dir /mnt/backups/jfolio/jfolio-backup-... --drop
+```
+
+백업 파일을 수동으로 복원해야 한다면 `manifest.json`의
+`collections[].name`/`file`을 참고해 `mongoimport --jsonArray`를 사용할 수
+있습니다. gzip 파일은 `gunzip -c`로 풀어 전달합니다. 문서가 0개인 컬렉션
+파일(`[]`)은 `mongoimport`가 오류로 처리하므로 건너뛰어도 됩니다.
