@@ -91,6 +91,13 @@ describe("yahooSymbolCandidates", () => {
     expect(yahooSymbolCandidates("005930", "kospi")).toEqual(["005930.KS"]);
   });
 
+  it("derives board suffixes for alphanumeric ETF/ETN codes", () => {
+    expect(yahooSymbolCandidates("0167A0", "KRX")).toEqual(["0167A0.KS", "0167A0.KQ"]);
+    expect(yahooSymbolCandidates("0177N0", "KOSPI")).toEqual(["0177N0.KS"]);
+    // KRX codes are case-insensitive; Yahoo wants the upper-case ticker.
+    expect(yahooSymbolCandidates("0167a0", "KRX")).toEqual(["0167A0.KS", "0167A0.KQ"]);
+  });
+
   it("respects an explicit exchange suffix", () => {
     expect(yahooSymbolCandidates("005930.KS", "KRX")).toEqual(["005930.KS"]);
     expect(yahooSymbolCandidates("7203.T", "TSE")).toEqual(["7203.T"]);
@@ -98,7 +105,7 @@ describe("yahooSymbolCandidates", () => {
 
   it("leaves non-Korean symbols untouched", () => {
     expect(yahooSymbolCandidates("AAPL", "NASDAQ")).toEqual(["AAPL"]);
-    // KRX market but not a 6-digit code: do not guess a suffix.
+    // KRX market but not a 6-character code: do not guess a suffix.
     expect(yahooSymbolCandidates("HXSCL", "KRX")).toEqual(["HXSCL"]);
   });
 
@@ -181,6 +188,27 @@ describe("Yahoo stock provider symbol resolution", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/chart/000660.KS?");
     expect(quote?.price).toBe(127_200);
+  });
+
+  it("derives the .KS suffix for an alphanumeric ETF code", async () => {
+    // Korean ETF/ETN codes can contain letters (e.g. "0167A0"); Yahoo still
+    // requires the board suffix, so the bare code must be expanded.
+    const { fetchImpl, calls } = routedFetch([
+      { match: "0167A0.KS", payload: yahooPayload("0167A0.KS", 14_100, { type: "ETF" }) },
+    ]);
+    const provider = new YahooStockProvider("https://query1.finance.yahoo.com", fetchImpl);
+
+    const quote = await provider.getLatestQuote(
+      stockInstrument({
+        symbol: "0167A0",
+        assetType: "ETF",
+        providers: [{ providerId: "yahoo", providerSymbol: "0167A0" }],
+      }),
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/chart/0167A0.KS?");
+    expect(quote?.price).toBe(14_100);
   });
 
   it("falls back to .KQ when the .KS candidate has no data", async () => {

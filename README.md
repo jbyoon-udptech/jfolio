@@ -471,3 +471,12 @@ curl -sD - -o /dev/null http://127.0.0.1:3000/api/auth/csrf | grep -i set-cookie
 - `Secure` 가 있는데 HTTP로 접속 중이라면 → `./deploy-nginx.sh <target>` 로
   TLS를 구성하고 `https://` 로 접속(HTTPS 환경의 쿠키 이름
   `SESSION_COOKIE_NAME`/`AUTH_CSRF_COOKIE_NAME` 도 웹과 일치해야 함)
+
+### 12.4 data backup & restore
+
+```bash
+server $ ssh ubunut@jbnix.retailtrend.net
+server $ mongoexport  --db=jFolio --collection=instruments --out=instruments.json
+# copy to local
+local $ mongoimport  --db=jFolio --collection=instruments --file=instruments.json
+```

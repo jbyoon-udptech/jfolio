@@ -18,16 +18,21 @@ const KOREAN_BOARD_SUFFIXES: Record<string, string[]> = {
   KOSDAQ: [".KQ"],
 };
 
-/** Korean tickers are 6-digit numeric codes (e.g. "005930", "000660"). */
-const KOREAN_CODE = /^\d{6}$/;
+/**
+ * Korean tickers are six alphanumeric characters: most equities are numeric
+ * (e.g. "005930", "000660"), while newer ETFs/ETNs mix in letters (e.g.
+ * "0167A0", "0177N0").
+ */
+const KOREAN_CODE = /^[0-9A-Z]{6}$/;
 
 /**
  * Ordered list of Yahoo tickers to try for an instrument, most likely first.
  *
  * - An explicit exchange suffix already present in the symbol always wins, so a
  *   caller can override the mapping (e.g. a Korean company's US listing).
- * - A Korean market with a 6-digit code gets the board suffix appended; `KRX`
- *   yields both boards so KOSDAQ codes resolve without the user picking a board.
+ * - A Korean market with a 6-character code gets the board suffix appended;
+ *   `KRX` yields both boards so KOSDAQ codes resolve without the user picking a
+ *   board.
  * - Any other symbol is returned unchanged.
  */
 export function yahooSymbolCandidates(rawSymbol: string, market: string): string[] {
@@ -37,7 +42,11 @@ export function yahooSymbolCandidates(rawSymbol: string, market: string): string
   if (symbol.includes(".")) return [symbol];
 
   const suffixes = KOREAN_BOARD_SUFFIXES[market.trim().toUpperCase()];
-  if (!suffixes || !KOREAN_CODE.test(symbol)) return [symbol];
+  if (!suffixes) return [symbol];
 
-  return suffixes.map((suffix) => `${symbol}${suffix}`);
+  // Korean codes are case-insensitive in practice; Yahoo expects upper case.
+  const code = symbol.toUpperCase();
+  if (!KOREAN_CODE.test(code)) return [symbol];
+
+  return suffixes.map((suffix) => `${code}${suffix}`);
 }
