@@ -1,3 +1,4 @@
+import { HistoryFilterForm } from "@/components/HistoryFilterForm";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -14,8 +15,6 @@ import type { Valuation } from "@/lib/types";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-
-const CURRENCIES = ["KRW", "USD", "JPY", "EUR"];
 
 function startOfDayIso(date: string): string {
   return new Date(`${date}T00:00:00+09:00`).toISOString();
@@ -101,42 +100,14 @@ export default async function HistoryPage({
         기간과 기준 통화를 선택해 일별/시간별 평가금액 추이와 특정 시점의 보유 현황을 확인합니다.
       </p>
 
-      <form className="card" method="get" style={{ marginBottom: 16 }}>
-        <div className="form-grid">
-          <label>
-            시작일
-            <input type="date" name="from" defaultValue={fromDate} />
-          </label>
-          <label>
-            종료일
-            <input type="date" name="to" defaultValue={toDate} />
-          </label>
-          <label>
-            기준 통화
-            <select name="baseCurrency" defaultValue={baseCurrency}>
-              {CURRENCIES.map((currency) => (
-                <option key={currency} value={currency}>
-                  {currency}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            간격
-            <select name="interval" defaultValue={interval}>
-              <option value="daily">일별</option>
-              <option value="hourly">시간별</option>
-            </select>
-          </label>
-          <label>
-            조회 기준일
-            <input type="date" name="asOf" defaultValue={asOfDate} />
-          </label>
-          <button type="submit" className="primary">
-            조회
-          </button>
-        </div>
-      </form>
+      <HistoryFilterForm
+        key={`${fromDate}:${toDate}:${baseCurrency}:${interval}:${asOfDate}`}
+        fromDate={fromDate}
+        toDate={toDate}
+        baseCurrency={baseCurrency}
+        interval={interval}
+        asOfDate={asOfDate}
+      />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="toolbar">
