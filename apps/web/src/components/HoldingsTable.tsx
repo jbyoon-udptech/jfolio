@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 type SortKey =
   | "name"
   | "price"
+  | "dailyChangeRate"
   | "marketValueBase"
   | "costBasisBase"
   | "unrealizedPnL"
@@ -36,6 +37,12 @@ const COLUMNS: Array<{
     label: "현재가(수량)",
     num: true,
     sub: { label: "매입평균가" },
+  },
+  {
+    key: "dailyChangeRate",
+    label: "전일대비",
+    num: true,
+    sub: { label: "등락률" },
   },
   {
     key: "marketValueBase",
@@ -177,6 +184,9 @@ export function HoldingsTable({
                         currency,
                       )}
                     </div>
+                  </td>
+                  <td className={`num ${pnlClass(position.dailyChangeRate)}`}>
+                    {formatPercent(position.dailyChangeRate)}
                   </td>
                   <td className="num">
                     {position.marketValueBase === null

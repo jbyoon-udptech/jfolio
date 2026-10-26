@@ -289,6 +289,8 @@ function mergeAvailablePositions(positions: ValuedPosition[]): ValuedPosition[] 
         costBasisBase === null || costBasisBase === 0 || unrealizedPnL === null
           ? null
           : round(multiply(divide(unrealizedPnL, costBasisBase) as number, 100), 4),
+      // The same instrument has the same quote in every portfolio; never sum it.
+      dailyChangeRate: existing.dailyChangeRate ?? position.dailyChangeRate,
       status: mergeDataStatus([existing.status, position.status]),
       statusReason: existing.statusReason ?? position.statusReason,
     });

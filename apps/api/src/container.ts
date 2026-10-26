@@ -46,7 +46,7 @@ export function createContainer(
   const now = overrides.now ?? (() => new Date());
   const providers = createProviderRegistry(config);
   const marketData = new MarketDataService(repos, now, new Set(config.fx.stablecoinPegs));
-  const valuation = new ValuationService(repos, marketData);
+  const valuation = new ValuationService(repos, marketData, now);
   const signals = new SignalService(repos, now);
   const collection = new CollectionService(repos, providers, marketData, signals, now);
   const backfill = new HistoricalBackfillService(

@@ -35,6 +35,7 @@ const DEFAULT_STABLECOIN_PEGS: ReadonlySet<string> = new Set([
 ]);
 /** Quotes dated more than this far in the future are rejected. */
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * FR-013 / FR-020 / FR-021: Validate and persist normalised market quotes.
@@ -163,6 +164,32 @@ export class MarketDataService {
     const daily = await this.repos.quotes.getLastBefore(instrumentId, inclusive, "1d");
     if (daily) return daily;
     return this.repos.quotes.getLastBefore(instrumentId, inclusive);
+  }
+
+  /**
+   * Latest stored daily close to use as the previous close for a quote at
+   * `latestTimestamp`. Daily bars are timestamped at the start of their
+   * session, so a bar less than 24h old belongs to the current session and the
+   * bar before it is the previous close. Older bars are already the previous
+   * close. Stored quotes only — this never calls a provider.
+   */
+  async getPreviousDailyClose(
+    instrumentId: string,
+    latestTimestamp: Date,
+  ): Promise<MarketQuote | null> {
+    const latest = await this.repos.quotes.getLastBefore(
+      instrumentId,
+      new Date(latestTimestamp.getTime() + 1),
+      "1d",
+    );
+    if (!latest) return null;
+    const ageMs = latestTimestamp.getTime() - latest.timestamp.getTime();
+    if (ageMs >= 0 && ageMs < DAY_MS) {
+      // Strictly before the current session's bar: also skips same-timestamp
+      // duplicates from another provider.
+      return this.repos.quotes.getLastBefore(instrumentId, latest.timestamp, "1d");
+    }
+    return latest;
   }
 
   /**

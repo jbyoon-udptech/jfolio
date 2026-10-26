@@ -142,7 +142,7 @@ export default async function HistoryPage({
         <div className="toolbar">
           <h2 style={{ margin: 0 }}>평가금액 추이 ({interval === "hourly" ? "시간별" : "일별"})</h2>
         </div>
-        <LineChart points={points} currency={baseCurrency} />
+        <LineChart points={points} currency={baseCurrency} interval={interval} />
         <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
           누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
         </div>

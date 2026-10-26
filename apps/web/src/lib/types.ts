@@ -82,6 +82,8 @@ export interface ValuedPosition {
   costBasisBase: number | null;
   unrealizedPnL: number | null;
   unrealizedReturn: number | null;
+  /** Latest quote-price change vs the previous daily close, in percent points. */
+  dailyChangeRate: number | null;
   status: DataStatus;
   statusReason?: string;
 }

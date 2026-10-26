@@ -99,6 +99,12 @@ export interface ValuedPosition {
   costBasisBase: number | null;
   unrealizedPnL: number | null;
   unrealizedReturn: number | null;
+  /**
+   * Latest quote-price change vs the previous daily close, in percent points
+   * (e.g. -5.25 means -5.25%). Null when no previous close is available.
+   * This is a price change, not a change in position market value.
+   */
+  dailyChangeRate: number | null;
   /** FR-053 / UI-006: never render an unavailable valuation as 0. */
   status: DataStatus;
   statusReason?: string;

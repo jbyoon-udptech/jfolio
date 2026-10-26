@@ -138,7 +138,7 @@ Query:
   "unavailableCount": 0,
   "allocationByAssetType": [{ "key": "CASH", "marketValueBase": 76918000, "weight": 59.68 }],
   "allocationByCurrency": [{ "key": "KRW", "marketValueBase": 71550000, "weight": 55.5 }],
-  "topHoldings": [ { "symbol": "005930", "marketValueBase": 21550000, "status": "NORMAL", "...": "..." } ],
+  "topHoldings": [ { "symbol": "005930", "marketValueBase": 21550000, "dailyChangeRate": 1.23, "status": "NORMAL", "...": "..." } ],
   "recentSignals": [],
   "lastDataUpdatedAt": "2026-10-16T07:15:06.345Z"
 }
@@ -146,6 +146,8 @@ Query:
 
 > `dailyChange` / `dailyChangeRate` 는 현재 또는 24시간 전 기준 평가금액이
 > `UNAVAILABLE` 이면 `null` 입니다 (0으로 표시하지 않음, UI-006).
+> `topHoldings[].dailyChangeRate` 는 최신가와 직전 일봉 종가의 등락률(%p)이며,
+> 직전 종가가 없으면 `null` 입니다.
 
 ### `GET /api/v1/dashboard/history`
 
@@ -231,8 +233,10 @@ Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
 표시됩니다. 생성·수정 UI는 웹의 `/portfolios` 화면에서 제공됩니다.
 
 `/holdings` 응답에는 각 포지션의 `price`, `fxRateToBase`, `marketValueBase`,
-`unrealizedPnL`, `status`, `statusReason` 이 포함됩니다. 가격/환율을 해석할 수
-없는 포지션은 `status: "UNAVAILABLE"` 이며 합계에서 제외됩니다.
+`unrealizedPnL`, `dailyChangeRate`, `status`, `statusReason` 이 포함됩니다.
+`dailyChangeRate` 는 최신가와 직전 일봉 종가의 등락률(%p)이며 직전 종가가 없으면
+`null` 입니다. 가격/환율을 해석할 수 없는 포지션은 `status: "UNAVAILABLE"` 이며
+합계에서 제외됩니다.
 
 `snapshotType` 값: `INTRADAY | DAILY | ON_DEMAND`.
 

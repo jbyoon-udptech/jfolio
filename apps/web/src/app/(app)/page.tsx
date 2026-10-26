@@ -141,7 +141,7 @@ export default async function DashboardPage({
             ))}
           </div>
         </div>
-        <LineChart points={points} currency={currency} />
+        <LineChart points={points} currency={currency} interval={range.interval} />
         {points.some((p) => p.totalAssetValue === null) ? (
           <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
@@ -171,6 +171,9 @@ export default async function DashboardPage({
                 <tr>
                   <th>종목</th>
                   <th className="num">평가금액</th>
+                  <th className="num" title="오늘자 전일대비 등락률">
+                    전일대비
+                  </th>
                   <th className="num">수익률</th>
                 </tr>
               </thead>
@@ -187,6 +190,9 @@ export default async function DashboardPage({
                       {holding.marketValueBase === null
                         ? "평가 불가"
                         : formatCurrency(holding.marketValueBase, currency)}
+                    </td>
+                    <td className={`num ${changeClass(holding.dailyChangeRate)}`}>
+                      {formatPercent(holding.dailyChangeRate)}
                     </td>
                     <td className={`num ${changeClass(holding.unrealizedPnL)}`}>
                       {formatPercent(holding.unrealizedReturn)}

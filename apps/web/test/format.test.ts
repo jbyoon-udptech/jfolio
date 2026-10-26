@@ -132,6 +132,7 @@ describe("collection cadence", () => {
 describe("period helpers (UI-001)", () => {
   it("normalises unknown periods to the default", () => {
     expect(normalizePeriod("1Y")).toBe("1Y");
+    expect(normalizePeriod("YTD")).toBe("YTD");
     expect(normalizePeriod("bogus")).toBe("1M");
     expect(normalizePeriod(undefined)).toBe("1M");
   });
@@ -145,5 +146,14 @@ describe("period helpers (UI-001)", () => {
     const monthly = periodRange("1M", now);
     expect(monthly.interval).toBe("daily");
     expect(monthly.to.getTime()).toBe(now.getTime());
+  });
+
+  it("starts YTD at local midnight on January 1", () => {
+    const now = new Date("2026-10-16T12:00:00.000Z");
+    const ytd = periodRange("YTD", now);
+    expect(ytd.interval).toBe("daily");
+    // 2026-01-01 00:00 in Asia/Seoul (UTC+9).
+    expect(ytd.from.toISOString()).toBe("2025-12-31T15:00:00.000Z");
+    expect(ytd.to.getTime()).toBe(now.getTime());
   });
 });

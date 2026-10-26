@@ -4,7 +4,7 @@ import type {
   Instrument,
   ValuedPosition,
 } from "@jfolio/shared";
-import { divide, multiply, round, subtract } from "../domain/money";
+import { divide, isPositiveFinite, multiply, round, subtract } from "../domain/money";
 import type { Repositories } from "../repositories/types";
 import { MarketDataService } from "./market-data.service";
 import { PositionService } from "./position.service";
@@ -47,6 +47,7 @@ export class ValuationService {
   constructor(
     private readonly repos: Repositories,
     private readonly marketData: MarketDataService,
+    private readonly now: () => Date = () => new Date(),
   ) {
     this.positions = new PositionService(repos);
   }
@@ -54,7 +55,11 @@ export class ValuationService {
   async valuate(portfolioId: string, options: ValuationOptions = {}): Promise<ValuationResult> {
     const portfolio = await this.repos.portfolios.findById(portfolioId);
     const baseCurrency = options.baseCurrency ?? portfolio?.baseCurrency ?? "KRW";
-    const asOf = options.asOf ?? new Date();
+    const now = this.now();
+    const asOf = options.asOf ?? now;
+    // Per-holding change rates describe "today", so they are only resolved for
+    // current valuations. Historical series only consume the totals.
+    const isCurrent = asOf.getTime() >= now.getTime() - 60_000;
 
     const { positions, warnings } = await this.positions.calculate(portfolioId, asOf);
     const instruments = await this.repos.instruments.findMany(
@@ -90,6 +95,7 @@ export class ValuationService {
         costBasisBase: null,
         unrealizedPnL: null,
         unrealizedReturn: null,
+        dailyChangeRate: null,
         status: "NORMAL",
       };
 
@@ -122,12 +128,22 @@ export class ValuationService {
         continue;
       }
 
+      const dailyChangeRate =
+        isCurrent && instrument.assetType !== "CASH" && priceTimestamp
+          ? await this.resolveDailyChangeRate(
+              instrument.instrumentId,
+              price,
+              priceTimestamp,
+            )
+          : null;
+
       const fxRateToBase = await this.marketData.getFxRate(priceCurrency, baseCurrency, asOf);
       if (fxRateToBase === null) {
         valued.push({
           ...base,
           price,
           priceTimestamp,
+          dailyChangeRate,
           status: "UNAVAILABLE",
           statusReason: "NO_FX_RATE",
         });
@@ -180,6 +196,7 @@ export class ValuationService {
         costBasisBase,
         unrealizedPnL,
         unrealizedReturn,
+        dailyChangeRate,
         status,
         statusReason,
       });
@@ -223,6 +240,21 @@ export class ValuationService {
       unavailableCount,
       warnings,
     };
+  }
+
+  /** Latest quote-price change vs the previous daily close, in percent points. */
+  private async resolveDailyChangeRate(
+    instrumentId: string,
+    price: number,
+    priceTimestamp: Date,
+  ): Promise<number | null> {
+    const previousClose = await this.marketData.getPreviousDailyClose(
+      instrumentId,
+      priceTimestamp,
+    );
+    if (!previousClose || !isPositiveFinite(previousClose.price)) return null;
+    const ratio = divide(subtract(price, previousClose.price), previousClose.price);
+    return ratio === null ? null : round(multiply(ratio, 100), 4);
   }
 
   /** FR-053: Daily (or hourly) total-value series reconstructed from history. */

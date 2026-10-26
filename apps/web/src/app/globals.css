@@ -521,8 +521,105 @@ a.btn:hover {
 }
 
 .chart {
+  display: block;
   width: 100%;
   height: 220px;
+}
+
+.chart-with-axis {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.chart-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-y-axis {
+  position: relative;
+  flex: 0 0 88px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-y-tick {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.chart-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: crosshair;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  min-width: 108px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.chart-tooltip-date {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chart-tooltip-value {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-x-axis {
+  position: relative;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.chart-x-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chart-x-tick.start {
+  transform: none;
+}
+
+.chart-x-tick.end {
+  transform: translateX(-100%);
+}
+
+@media (max-width: 900px) {
+  .chart-x-tick.minor {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .chart-x-tick.center {
+    display: none;
+  }
 }
 
 .bar {

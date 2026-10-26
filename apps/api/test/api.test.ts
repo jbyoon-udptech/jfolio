@@ -787,6 +787,91 @@ describe("8.2 dashboard", () => {
     expect(res.body.allocationByAssetType[0].key).toBe("STOCK");
   });
 
+  it("reports each top holding's price change against the previous daily close", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: new Date(FIXED_NOW.getTime() - 2 * 86_400_000),
+      quantity: 10,
+      price: 80,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 90, {
+        timestamp: new Date(FIXED_NOW.getTime() - 86_400_000),
+        interval: "1d",
+      }),
+    );
+    await container.marketData.storeQuote(instrument, makeQuote(instrument, 99));
+
+    const res = await request(app).get(`${BASE}/dashboard?portfolioId=${portfolio.portfolioId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.topHoldings).toHaveLength(1);
+    expect(res.body.topHoldings[0].dailyChangeRate).toBeCloseTo(10, 4);
+  });
+
+  it("uses the previous daily close even when today's bar is already stored", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: new Date(FIXED_NOW.getTime() - 3 * 86_400_000),
+      quantity: 10,
+      price: 70,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 80, {
+        timestamp: new Date(FIXED_NOW.getTime() - 2 * 86_400_000),
+        interval: "1d",
+      }),
+    );
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 95, {
+        timestamp: new Date(FIXED_NOW.getTime() - 60 * 60 * 1000),
+        interval: "1d",
+      }),
+    );
+    await container.marketData.storeQuote(instrument, makeQuote(instrument, 99));
+
+    const res = await request(app).get(`${BASE}/dashboard?portfolioId=${portfolio.portfolioId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.topHoldings[0].dailyChangeRate).toBeCloseTo(23.75, 4);
+  });
+
+  it("leaves the per-holding change rate null when no previous close exists", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 10,
+      price: 80,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.marketData.storeQuote(instrument, makeQuote(instrument, 99));
+
+    const res = await request(app).get(`${BASE}/dashboard?portfolioId=${portfolio.portfolioId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.topHoldings[0].dailyChangeRate).toBeNull();
+  });
+
   it("reports a null daily change when the baseline is unavailable", async () => {
     const { container } = createTestContext();
     const app = appFor(container);
@@ -882,6 +967,47 @@ describe("8.2 dashboard", () => {
         (holding: { instrumentId: string }) => holding.instrumentId === a.instrumentId,
       ).marketValueBase,
     ).toBe(1000);
+  });
+
+  it("does not sum a holding's change rate when merging portfolios", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
+    const second = await container.portfolios.create({ name: "Second", baseCurrency: "KRW" });
+    const instrument = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+
+    for (const portfolio of [first, second]) {
+      await container.transactions.create({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp: new Date(FIXED_NOW.getTime() - 2 * 86_400_000),
+        quantity: 5,
+        price: 80,
+        currency: "KRW",
+        fee: 0,
+      });
+    }
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 90, {
+        timestamp: new Date(FIXED_NOW.getTime() - 86_400_000),
+        interval: "1d",
+      }),
+    );
+    await container.marketData.storeQuote(instrument, makeQuote(instrument, 99));
+
+    const res = await request(app).get(`${BASE}/dashboard?portfolioId=all`);
+    expect(res.status).toBe(200);
+    expect(res.body.topHoldings).toHaveLength(1);
+    expect(res.body.topHoldings[0].dailyChangeRate).toBeCloseTo(10, 4);
   });
 
   it("aggregates all visible portfolios for dashboard history", async () => {
