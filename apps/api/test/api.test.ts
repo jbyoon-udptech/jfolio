@@ -350,6 +350,95 @@ describe("8.4 portfolios", () => {
     expect(read.body.name).toBe("New Name");
   });
 
+  it("hides and restores a portfolio via PATCH", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({
+      name: "Hidden",
+      baseCurrency: "KRW",
+      isDefault: false,
+    });
+
+    const hidden = await request(app)
+      .patch(`${BASE}/portfolios/${portfolio.portfolioId}`)
+      .send({ isHidden: true });
+    expect(hidden.status).toBe(200);
+    expect(hidden.body.isHidden).toBe(true);
+
+    // Hidden portfolios are absent from default lists but stay addressable.
+    expect((await request(app).get(`${BASE}/portfolios`)).body.total).toBe(0);
+    const all = await request(app).get(`${BASE}/portfolios?includeHidden=true`);
+    expect(all.body.total).toBe(1);
+    expect(all.body.items[0].isHidden).toBe(true);
+    expect((await request(app).get(`${BASE}/portfolios/${portfolio.portfolioId}`)).status).toBe(200);
+
+    const restored = await request(app)
+      .patch(`${BASE}/portfolios/${portfolio.portfolioId}`)
+      .send({ isHidden: false });
+    expect(restored.status).toBe(200);
+    expect(restored.body.isHidden).toBe(false);
+    expect((await request(app).get(`${BASE}/portfolios`)).body.total).toBe(1);
+  });
+
+  it("refuses to hide the default portfolio", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({ name: "Default", baseCurrency: "KRW" });
+    expect(portfolio.isDefault).toBe(true);
+
+    const res = await request(app)
+      .patch(`${BASE}/portfolios/${portfolio.portfolioId}`)
+      .send({ isHidden: true });
+    expect(res.status).toBe(409);
+  });
+
+  it("repairs a legacy hidden default portfolio", async () => {
+    const { container, repos } = createTestContext();
+    const portfolio = await container.portfolios.create({ name: "Legacy", baseCurrency: "KRW" });
+    expect(portfolio.isDefault).toBe(true);
+    await repos.portfolios.update(portfolio.portfolioId, { isHidden: true });
+
+    const ensured = await container.portfolios.ensureDefault();
+    expect(ensured.portfolioId).toBe(portfolio.portfolioId);
+    expect(ensured.isHidden).toBe(false);
+    expect((await container.portfolios.listVisible()).map((p) => p.portfolioId)).toEqual([
+      portfolio.portfolioId,
+    ]);
+  });
+
+  it("reveals a hidden portfolio when it becomes the default", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
+    const second = await container.portfolios.create({
+      name: "Second",
+      baseCurrency: "KRW",
+      isDefault: false,
+    });
+    await request(app)
+      .patch(`${BASE}/portfolios/${second.portfolioId}`)
+      .send({ isHidden: true });
+    expect((await request(app).get(`${BASE}/portfolios`)).body.total).toBe(1);
+
+    const res = await request(app)
+      .patch(`${BASE}/portfolios/${second.portfolioId}`)
+      .send({ isDefault: true });
+    expect(res.status).toBe(200);
+    expect(res.body.isDefault).toBe(true);
+    expect(res.body.isHidden).toBe(false);
+
+    const list = await request(app).get(`${BASE}/portfolios`);
+    expect(list.body.total).toBe(2);
+    const byId = new Map(
+      (list.body.items as Array<{ portfolioId: string; isDefault: boolean }>).map((p) => [
+        p.portfolioId,
+        p.isDefault,
+      ]),
+    );
+    expect(byId.get(second.portfolioId)).toBe(true);
+    expect(byId.get(first.portfolioId)).toBe(false);
+  });
+
   it("moves the default flag to another portfolio", async () => {
     const { container } = createTestContext();
     const app = appFor(container);

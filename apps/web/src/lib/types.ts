@@ -44,6 +44,7 @@ export interface Portfolio {
   name: string;
   baseCurrency: string;
   isDefault: boolean;
+  isHidden: boolean;
   createdAt: string;
   updatedAt: string;
 }

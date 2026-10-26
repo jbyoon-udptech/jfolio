@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,17 +16,22 @@ export default async function PortfolioPage({
   searchParams: Promise<{ portfolioId?: string }>;
 }) {
   const params = await searchParams;
-  const dashboardResult = await safe(() =>
-    api.dashboard({ portfolioId: params.portfolioId }),
-  );
+  const [dashboardResult, portfoliosResult] = await Promise.all([
+    safe(() => api.dashboard({ portfolioId: params.portfolioId })),
+    safe(() => api.portfolios()),
+  ]);
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
   }
   const portfolioId = dashboardResult.data.portfolioId;
-  const [holdingsResult, portfoliosResult] = await Promise.all([
-    safe(() => api.holdings(portfolioId)),
-    safe(() => api.portfolios()),
-  ]);
+  if (
+    params.portfolioId &&
+    portfoliosResult.data &&
+    !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
+  ) {
+    redirect("/portfolio");
+  }
+  const holdingsResult = await safe(() => api.holdings(portfolioId));
   if (!holdingsResult.data) {
     return <ApiErrorNotice error={holdingsResult.error} />;
   }

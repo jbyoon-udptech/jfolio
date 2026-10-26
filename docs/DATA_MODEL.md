@@ -89,10 +89,15 @@ UserIdentity { identityId, userId, provider, providerUserId, createdAt }
 ### Portfolio
 
 ```
-{ portfolioId, userId, name, baseCurrency, isDefault, createdAt, updatedAt }
+{ portfolioId, userId, name, baseCurrency, isDefault, isHidden, createdAt, updatedAt }
 ```
 
 - `ensureDefault()` 가 사용자별 기본 포트폴리오를 보장합니다 (없으면 생성).
+- `isHidden` 은 목록·선택 목록·대시보드 등 모든 화면에서 해당 포트폴리오를
+  기본적으로 제외합니다. `/portfolios` 의 "숨긴 항목 보기"에서만 다시 표시할 수
+  있고, ID로는 계속 접근할 수 있습니다.
+- 기본 포트폴리오는 숨길 수 없으며, 숨김 포트폴리오를 기본으로 지정하면 자동으로
+  다시 표시됩니다.
 
 ### Transaction
 

@@ -3,6 +3,7 @@ import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { TransactionForm, type Option } from "@/components/TransactionForm";
 import { TransactionRow } from "@/components/TransactionRow";
 import { api, safe } from "@/lib/api";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,19 @@ export default async function TransactionsPage({
 
   if (!transactionsResult.data) {
     return <ApiErrorNotice error={transactionsResult.error} />;
+  }
+
+  // Hidden portfolios are not selectable; drop the stale filter.
+  if (
+    params.portfolioId &&
+    portfoliosResult.data &&
+    !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
+  ) {
+    redirect(
+      params.instrumentId
+        ? `/transactions?instrumentId=${encodeURIComponent(params.instrumentId)}`
+        : "/transactions",
+    );
   }
 
   const portfolios = portfoliosResult.data?.items ?? [];
@@ -88,7 +102,8 @@ export default async function TransactionsPage({
               <tr>
                 <th>일시</th>
                 <th>유형</th>
-                <th>자산</th>
+                <th>종목명</th>
+                <th>코드명</th>
                 <th className="num">수량</th>
                 <th className="num">단가</th>
                 <th className="num">수수료</th>
@@ -103,6 +118,7 @@ export default async function TransactionsPage({
                   <TransactionRow
                     key={tx.transactionId}
                     transaction={tx}
+                    name={instrument?.name}
                     symbol={instrument?.symbol}
                   />
                 );

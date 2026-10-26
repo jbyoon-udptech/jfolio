@@ -11,6 +11,8 @@ export interface Portfolio {
   name: string;
   baseCurrency: string;
   isDefault: boolean;
+  /** Hidden from the portfolio list page; data and selections stay intact. */
+  isHidden: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

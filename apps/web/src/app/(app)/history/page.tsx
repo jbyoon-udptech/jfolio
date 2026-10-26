@@ -10,6 +10,7 @@ import {
   formatQuantity,
 } from "@/lib/format";
 import type { Valuation } from "@/lib/types";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,23 @@ export default async function HistoryPage({
   const interval = params.interval === "hourly" ? "hourly" : "daily";
   const baseCurrency = params.baseCurrency ?? "KRW";
   const asOfDate = params.asOf ?? toDate;
+
+  // Hidden portfolios are not selectable; drop the stale ID and use the default.
+  if (params.portfolioId) {
+    const portfoliosResult = await safe(() => api.portfolios());
+    if (
+      portfoliosResult.data &&
+      !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
+    ) {
+      const next = new URLSearchParams();
+      for (const key of ["from", "to", "interval", "baseCurrency", "asOf"] as const) {
+        const value = params[key];
+        if (value) next.set(key, value);
+      }
+      const qs = next.toString();
+      redirect(qs ? `/history?${qs}` : "/history");
+    }
+  }
 
   const dashboardResult = await safe(() =>
     api.dashboard({ portfolioId: params.portfolioId, baseCurrency }),

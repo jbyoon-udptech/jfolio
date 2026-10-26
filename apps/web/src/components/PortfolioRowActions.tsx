@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Portfolio } from "@/lib/types";
 
-/** FR-030: inline rename / re-base and "make default" for a portfolio row. */
+/** FR-030: inline rename / re-base, "make default" and hide/restore for a portfolio row. */
 export function PortfolioRowActions({ portfolio }: { portfolio: Portfolio }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -93,6 +93,15 @@ export function PortfolioRowActions({ portfolio }: { portfolio: Portfolio }) {
       {!portfolio.isDefault ? (
         <button type="button" disabled={pending} onClick={() => patch({ isDefault: true })}>
           기본으로
+        </button>
+      ) : null}
+      {!portfolio.isDefault || portfolio.isHidden ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => patch({ isHidden: !portfolio.isHidden })}
+        >
+          {portfolio.isHidden ? "다시 표시" : "숨기기"}
         </button>
       ) : null}
       {error ? (

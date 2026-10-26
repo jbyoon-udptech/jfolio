@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AllocationList } from "@/components/AllocationList";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
@@ -24,14 +25,24 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const period = normalizePeriod(params.period);
-  const dashboardResult = await safe(() =>
-    api.dashboard({ portfolioId: params.portfolioId }),
-  );
+  const [dashboardResult, portfoliosResult] = await Promise.all([
+    safe(() => api.dashboard({ portfolioId: params.portfolioId })),
+    safe(() => api.portfolios()),
+  ]);
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
   }
   const dashboard = dashboardResult.data;
   const currency = dashboard.baseCurrency;
+
+  // A hidden portfolio must not remain in view; fall back to the default one.
+  if (
+    params.portfolioId &&
+    portfoliosResult.data &&
+    !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
+  ) {
+    redirect(params.period ? `/?period=${encodeURIComponent(params.period)}` : "/");
+  }
 
   const range = periodRange(period);
   const historyResult = await safe(() =>
@@ -43,7 +54,6 @@ export default async function DashboardPage({
   );
   const points = historyResult.data?.items ?? [];
 
-  const portfoliosResult = await safe(() => api.portfolios());
   const portfolioOptions: Option[] = (portfoliosResult.data?.items ?? []).map((p) => ({
     value: p.portfolioId,
     label: `${p.name} (${p.baseCurrency})`,

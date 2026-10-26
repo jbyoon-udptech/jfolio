@@ -17,9 +17,10 @@ export const updatePortfolioSchema = z
     name: z.string().trim().min(1).max(128).optional(),
     baseCurrency: currencyCode.optional(),
     isDefault: z.boolean().optional(),
+    isHidden: z.boolean().optional(),
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
-    message: "at least one of name, baseCurrency or isDefault is required",
+    message: "at least one of name, baseCurrency, isDefault or isHidden is required",
   });
 export type UpdatePortfolioDto = z.infer<typeof updatePortfolioSchema>;
 

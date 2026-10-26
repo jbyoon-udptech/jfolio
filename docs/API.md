@@ -198,20 +198,25 @@ Query:
 
 | Method | Endpoint | 설명 |
 | --- | --- | --- |
-| GET | `/api/v1/portfolios` | 포트폴리오 목록 |
+| GET | `/api/v1/portfolios` | 포트폴리오 목록 (기본: 숨김 제외, `includeHidden=true` 포함) |
 | POST | `/api/v1/portfolios` | 포트폴리오 생성 |
 | GET | `/api/v1/portfolios/:id` | 포트폴리오 상세 |
-| PATCH | `/api/v1/portfolios/:id` | 포트폴리오 수정 (`name`, `baseCurrency`, `isDefault`) |
+| PATCH | `/api/v1/portfolios/:id` | 포트폴리오 수정 (`name`, `baseCurrency`, `isDefault`, `isHidden`) |
 | GET | `/api/v1/portfolios/:id/holdings` | 보유 자산 평가 |
 | GET | `/api/v1/portfolios/:id/valuation` | 평가금액 (`asOf`, `baseCurrency`) |
 | GET | `/api/v1/portfolios/:id/history` | 과거 평가 시계열 (`from`, `to`, `interval`) |
 | GET | `/api/v1/portfolios/:id/snapshots` | 스냅샷 조회 (`snapshotType`, `from`, `to`, `limit`) |
 | POST | `/api/v1/portfolios/:id/snapshots` | 온디맨드 스냅샷 생성 (`snapshotType`, `asOf`, `baseCurrency`) |
 
-`PATCH /portfolios/:id` 는 `name` / `baseCurrency` / `isDefault` 중 **하나 이상**을
-받습니다. 빈 본문은 `422` 로 거부되며, `isDefault: true` 로 지정하면 같은 사용자의
-다른 포트폴리오는 자동으로 기본 지정이 해제됩니다. 생성·수정 UI는 웹의
-`/portfolios` 화면에서 제공됩니다.
+`GET /portfolios` 는 기본적으로 숨김 포트폴리오를 제외하며,
+`includeHidden=true` 로 전체를 조회합니다(관리 화면용).
+
+`PATCH /portfolios/:id` 는 `name` / `baseCurrency` / `isDefault` / `isHidden` 중
+**하나 이상**을 받습니다. 빈 본문은 `422` 로 거부되며, `isDefault: true` 로 지정하면
+같은 사용자의 다른 포트폴리오는 자동으로 기본 지정이 해제됩니다. `isHidden: true` 는
+모든 화면의 포트폴리오 목록·선택에서 제외하며 데이터는 유지합니다. 기본
+포트폴리오는 숨길 수 없고(`409`), 숨김 포트폴리오를 기본으로 지정하면 자동으로 다시
+표시됩니다. 생성·수정 UI는 웹의 `/portfolios` 화면에서 제공됩니다.
 
 `/holdings` 응답에는 각 포지션의 `price`, `fxRateToBase`, `marketValueBase`,
 `unrealizedPnL`, `status`, `statusReason` 이 포함됩니다. 가격/환율을 해석할 수

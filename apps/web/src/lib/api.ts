@@ -121,7 +121,7 @@ export const authApi = {
 
 export type { AuthUser };
 
-function query(params: Record<string, string | number | undefined>): string {
+function query(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== "") search.set(key, String(value));
@@ -134,7 +134,10 @@ export const api = {
   dashboard: (params: { portfolioId?: string; baseCurrency?: string } = {}) =>
     request<Dashboard>(`/dashboard${query(params)}`),
 
-  portfolios: () => request<ListResponse<Portfolio>>("/portfolios"),
+  portfolios: (params: { includeHidden?: boolean } = {}) =>
+    request<ListResponse<Portfolio>>(
+      `/portfolios${query({ includeHidden: params.includeHidden })}`,
+    ),
   portfolio: (id: string) => request<Portfolio>(`/portfolios/${id}`),
   holdings: (id: string) =>
     request<{

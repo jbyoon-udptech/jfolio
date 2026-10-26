@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  booleanQuery,
   createPortfolioSchema,
   historyQuery,
   snapshotTypeSchema,
@@ -11,6 +12,10 @@ import type { Container } from "../../container";
 import { notFound } from "../http-error";
 import { asyncHandler } from "../middleware";
 import { parseBody, parseQuery, pathParam } from "../validate";
+
+const listPortfoliosQuery = z.object({
+  includeHidden: booleanQuery.optional().default(false),
+});
 
 const snapshotsQuery = z.object({
   snapshotType: snapshotTypeSchema.optional(),
@@ -31,8 +36,11 @@ export function createPortfoliosRouter(container: Container): Router {
 
   router.get(
     "/",
-    asyncHandler(async (_req, res) => {
-      const items = await container.portfolios.list();
+    asyncHandler(async (req, res) => {
+      const query = parseQuery(listPortfoliosQuery, req.query);
+      const items = query.includeHidden
+        ? await container.portfolios.list()
+        : await container.portfolios.listVisible();
       res.json({ items, total: items.length });
     }),
   );

@@ -36,9 +36,11 @@ const TRANSACTION_TYPES = [
  */
 export function TransactionRow({
   transaction,
+  name,
   symbol,
 }: {
   transaction: Transaction;
+  name?: string;
   symbol?: string;
 }) {
   const router = useRouter();
@@ -119,10 +121,19 @@ export function TransactionRow({
     }
   }
 
-  const assetCell = symbol ? (
-    <a href={`/assets/${transaction.instrumentId}`}>{symbol}</a>
-  ) : (
-    transaction.instrumentId
+  // The asset itself is fixed while editing, so both branches render the same
+  // name/code cells. The name links to the asset master; the code is secondary.
+  const instrumentCells = (
+    <>
+      <td>
+        {name ? (
+          <a href={`/assets/${transaction.instrumentId}`}>{name}</a>
+        ) : (
+          transaction.instrumentId
+        )}
+      </td>
+      <td className="muted">{symbol ?? "—"}</td>
+    </>
   );
 
   if (editing) {
@@ -149,7 +160,7 @@ export function TransactionRow({
             ))}
           </select>
         </td>
-        <td>{assetCell}</td>
+        {instrumentCells}
         <td className="num">
           <input
             type="number"
@@ -220,7 +231,7 @@ export function TransactionRow({
     <tr>
       <td className="muted">{formatDateTime(transaction.timestamp)}</td>
       <td>{transaction.type}</td>
-      <td>{assetCell}</td>
+      {instrumentCells}
       <td className="num">{formatQuantity(transaction.quantity)}</td>
       <td className="num">{formatPrice(transaction.price, transaction.currency)}</td>
       <td className="num">
