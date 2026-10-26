@@ -4,8 +4,11 @@ import type {
   DataInterval,
   Instrument,
   ProviderState,
+  QuoteInterval,
 } from "@jfolio/shared";
+import type { AppConfig } from "../config";
 import { newId } from "../domain/ids";
+import { quoteIntervalFromSeconds } from "../domain/intervals";
 import type { MarketDataProvider } from "../providers/market-data.provider";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Repositories } from "../repositories/types";
@@ -37,11 +40,24 @@ export class CollectionService {
     private readonly registry: ProviderRegistry,
     private readonly marketData: MarketDataService,
     private readonly signals: SignalService,
+    private readonly intervals: AppConfig["collection"]["intervals"],
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   private resolveProvider(instrument: Instrument): MarketDataProvider | undefined {
     return this.registry.forInstrument(instrument);
+  }
+
+  /**
+   * Live quotes are stored with the configured collection cadence rather than
+   * a provider-native interval (e.g. Binance always labels its ticker "1m").
+   * ETF instruments share the stock collection schedule.
+   */
+  private collectionInterval(instrument: Instrument): QuoteInterval | null {
+    const key = instrument.assetType === "ETF" ? "STOCK" : instrument.assetType;
+    if (key !== "STOCK" && key !== "CRYPTO" && key !== "FX") return null;
+    const seconds = this.intervals[key];
+    return Number.isFinite(seconds) && seconds > 0 ? quoteIntervalFromSeconds(seconds) : null;
   }
 
   async run(options: CollectionRunOptions = {}): Promise<CollectionRunResult> {
@@ -81,12 +97,14 @@ export class CollectionService {
       for (const instrument of groupInstruments) {
         result.instrumentsProcessed += 1;
         try {
-          const quote = await provider.getLatestQuote(instrument);
-          if (!quote) {
+          const fetched = await provider.getLatestQuote(instrument);
+          if (!fetched) {
             counters.failure += 1;
             errors.push(`${instrument.symbol}: provider returned no quote`);
             continue;
           }
+          const interval = this.collectionInterval(instrument);
+          const quote = interval ? { ...fetched, interval } : fetched;
           const stored = await this.marketData.storeQuote(instrument, quote);
           if (stored.stored) result.inserted += 1;
           else if (stored.duplicate) result.duplicates += 1;

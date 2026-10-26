@@ -186,7 +186,9 @@ Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
 
 `providers` 는 자산당 최대 1개까지 지정할 수 있습니다.
 `assetType` 값: `STOCK | ETF | CRYPTO | FX | BOND | COMMODITY | CASH`.
-`interval` 값: `tick | 10s | 1m | 5m | 1h | 1d`.
+`interval` 값: 과거 백필은 `tick | 10s | 1m | 5m | 1h | 1d` 를 사용하고,
+실시간 수집 시세는 `*_COLLECTION_INTERVAL_SECONDS` 에 대응하는 라벨
+(`600` → `10m`, `90` → `90s`)을 사용합니다.
 
 `PATCH /assets/:id` 는 부분 수정입니다. 보내지 않은 필드는 기존 값을 유지하며,
 빈 본문(`{}`)은 `422` 로 거부됩니다. 자연키(`symbol`+`market`+`currency`)가

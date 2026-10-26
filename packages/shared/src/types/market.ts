@@ -1,4 +1,4 @@
-import type { DataInterval } from "./asset";
+import type { QuoteInterval } from "./asset";
 
 /**
  * FR-020: Standard market quote shape every provider must normalise to.
@@ -8,7 +8,7 @@ import type { DataInterval } from "./asset";
 export interface MarketQuote {
   instrumentId: string;
   providerId: string;
-  interval: DataInterval;
+  interval: QuoteInterval;
   /** As-of time of the price (UTC). */
   timestamp: Date;
   /** Server receipt time (UTC). */
@@ -27,7 +27,7 @@ export interface MarketQuote {
 export interface LatestQuote {
   instrumentId: string;
   providerId: string;
-  interval: DataInterval;
+  interval: QuoteInterval;
   timestamp: Date;
   receivedAt: Date;
   price: number;

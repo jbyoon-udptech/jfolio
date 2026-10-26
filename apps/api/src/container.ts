@@ -48,7 +48,14 @@ export function createContainer(
   const marketData = new MarketDataService(repos, now, new Set(config.fx.stablecoinPegs));
   const valuation = new ValuationService(repos, marketData, now);
   const signals = new SignalService(repos, now);
-  const collection = new CollectionService(repos, providers, marketData, signals, now);
+  const collection = new CollectionService(
+    repos,
+    providers,
+    marketData,
+    signals,
+    config.collection.intervals,
+    now,
+  );
   const backfill = new HistoricalBackfillService(
     repos,
     providers,

@@ -1,4 +1,4 @@
-import type { DataInterval } from "@jfolio/shared";
+import type { DataInterval, QuoteInterval } from "@jfolio/shared";
 
 /** Canonical duration of each supported interval. `tick` uses 1s as a floor. */
 export const INTERVAL_MS: Record<DataInterval, number> = {
@@ -9,6 +9,25 @@ export const INTERVAL_MS: Record<DataInterval, number> = {
   "1h": 3_600_000,
   "1d": 86_400_000,
 };
+
+/**
+ * Convert a configured collection period in seconds into the interval label
+ * stored with each quote. Known intervals keep their canonical short form
+ * (600 -> "10m"), while custom cadences use an explicit unit (90 -> "90s").
+ */
+export function quoteIntervalFromSeconds(seconds: number): QuoteInterval {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    throw new RangeError(`collection interval seconds must be positive, got ${seconds}`);
+  }
+  const exact = (Object.entries(INTERVAL_MS) as Array<[DataInterval, number]>).find(
+    ([, ms]) => ms === seconds * 1000,
+  );
+  if (exact) return exact[0];
+  if (seconds % 86_400 === 0) return `${seconds / 86_400}d`;
+  if (seconds % 3_600 === 0) return `${seconds / 3_600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
+}
 
 export function intervalToMs(interval: DataInterval): number {
   return INTERVAL_MS[interval] ?? INTERVAL_MS["1m"];

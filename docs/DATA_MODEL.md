@@ -50,7 +50,10 @@ MongoDB native driver 사용. 컬렉션 정의는
 ```
 
 - `timestamp` = 가격의 기준 시각, `receivedAt` = 서버 저장 시각 (혼동 금지)
-- `interval`: `tick | 10s | 1m | 5m | 1h | 1d`
+- `interval`: 저장된 시세의 시간 단위. 실시간 수집분은
+  `*_COLLECTION_INTERVAL_SECONDS` 를 읽기 쉬운 라벨로 변환해 저장합니다
+  (`600` → `10m`, `90` → `90s`). 과거 백필은 공급자 단위
+  (`tick | 10s | 1m | 5m | 1h | 1d`)를 사용합니다.
 - 논리 중복 키: `(instrumentId, providerId, interval, timestamp)`
 - `latest_quotes` 는 종목별 물질화 뷰입니다. 수집 시 매 관측마다 갱신되며(동일
   시각 중복이면 `receivedAt` 만 갱신), 저장된 `timestamp` 보다 오래된 시세는

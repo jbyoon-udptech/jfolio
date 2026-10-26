@@ -350,7 +350,7 @@ receivedAt: Date;
 
 providerId: string;
 
-interval?: "tick" | "1m" | "5m" | "1h" | "1d";
+interval?: "tick" | "10s" | "1m" | "5m" | "1h" | "1d" | `${number}s` | `${number}m` | `${number}h` | `${number}d`;
 
 open?: number;
 high?: number;
@@ -366,7 +366,8 @@ isFinal?: boolean;
     timestamp: 가격이 기준으로 삼는 시각
     receivedAt: 서버가 데이터를 수신한 시각
     price: 현재가 또는 해당 데이터의 대표 가격
-    interval: 데이터의 시간 단위
+    interval: 데이터의 시간 단위. 실시간 수집 시세는 설정된 수집 주기를
+              사람이 읽기 쉬운 라벨로 저장한다 (예: 600초 → "10m").
     isFinal: 해당 데이터가 확정된 값인지 나타내는 선택적 필드
 
 실제 공급자별 데이터는 이 표준 형식으로 변환한 뒤 저장한다.
