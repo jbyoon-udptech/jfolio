@@ -444,6 +444,12 @@ button {
   padding: 7px 10px;
 }
 
+input:disabled,
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 button {
   cursor: pointer;
 }

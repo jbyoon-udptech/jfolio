@@ -1,8 +1,13 @@
 import { ApiErrorNotice } from "@/components/Notice";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
-import { TransactionForm, type Option } from "@/components/TransactionForm";
+import {
+  TransactionForm,
+  type Option,
+  type OptionGroup,
+} from "@/components/TransactionForm";
 import { TransactionRow } from "@/components/TransactionRow";
 import { api, safe } from "@/lib/api";
+import { groupByCurrency } from "@/lib/instrument";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -45,17 +50,32 @@ export default async function TransactionsPage({
 
   const portfolios = portfoliosResult.data?.items ?? [];
   const instruments = instrumentsResult.data?.items ?? [];
-  const transactions = transactionsResult.data.items;
+  const allTransactions = transactionsResult.data.items;
+  const visiblePortfolioIds = new Set(portfolios.map((p) => p.portfolioId));
+  // Hidden portfolios are not shown anywhere, including this global ledger.
+  const transactions = portfoliosResult.data
+    ? allTransactions.filter((tx) => visiblePortfolioIds.has(tx.portfolioId))
+    : allTransactions;
+  const hiddenTransactionCount = portfoliosResult.data
+    ? allTransactions.length - transactions.length
+    : 0;
+  const portfolioNameById = new Map(portfolios.map((p) => [p.portfolioId, p.name]));
   const currentPortfolioId = params.portfolioId ?? "";
 
   const portfolioOptions: Option[] = portfolios.map((p) => ({
     value: p.portfolioId,
     label: `${p.name} (${p.baseCurrency})`,
   }));
-  const instrumentOptions: Option[] = instruments.map((i) => ({
-    value: i.instrumentId,
-    label: `${i.name} (${i.symbol})`,
-  }));
+  // Currency headers make the mixed-currency asset list easier to scan.
+  const instrumentGroups: OptionGroup[] = groupByCurrency(instruments).map(
+    (group) => ({
+      label: group.currency,
+      options: group.items.map((i) => ({
+        value: i.instrumentId,
+        label: `${i.name} (${i.symbol})`,
+      })),
+    }),
+  );
 
   return (
     <>
@@ -63,8 +83,11 @@ export default async function TransactionsPage({
         <div>
           <h1 className="page-title">거래 내역</h1>
           <p className="page-sub">
-            매수/매도, 입출금, 배당 등 모든 자산 변동을 기록합니다. 총{" "}
-            {transactionsResult.data.total}건. 각 행에서 수정·삭제할 수 있습니다.
+            매수/매도, 입출금, 배당 등 모든 자산 변동을 기록합니다.{" "}
+            {hiddenTransactionCount > 0
+              ? `표시 ${transactions.length}건 (숨김 포트폴리오 거래 ${hiddenTransactionCount}건 제외).`
+              : `총 ${transactionsResult.data.total}건.`}{" "}
+            각 행에서 수정·삭제할 수 있습니다.
           </p>
         </div>
         {portfolioOptions.length > 0 ? (
@@ -81,10 +104,10 @@ export default async function TransactionsPage({
         ) : null}
       </div>
 
-      {portfolioOptions.length > 0 && instrumentOptions.length > 0 ? (
+      {portfolioOptions.length > 0 && instrumentGroups.length > 0 ? (
         <TransactionForm
           portfolios={portfolioOptions}
-          instruments={instrumentOptions}
+          instruments={instrumentGroups}
           defaultPortfolioId={params.portfolioId}
         />
       ) : (
@@ -102,6 +125,7 @@ export default async function TransactionsPage({
               <tr>
                 <th>일시</th>
                 <th>유형</th>
+                <th>포트폴리오</th>
                 <th>종목명</th>
                 <th>코드명</th>
                 <th className="num">수량</th>
@@ -120,6 +144,8 @@ export default async function TransactionsPage({
                     transaction={tx}
                     name={instrument?.name}
                     symbol={instrument?.symbol}
+                    portfolioName={portfolioNameById.get(tx.portfolioId)}
+                    portfolioOptions={portfolioOptions}
                   />
                 );
               })}

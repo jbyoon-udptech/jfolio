@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 
 const WIDTH = 800;
 const PAD = 10;
@@ -83,8 +83,8 @@ export function PriceChart({
         )}
       </svg>
       <div className="toolbar" style={{ justifyContent: "space-between", marginTop: 6 }}>
-        <span className="muted">{formatCurrency(min, currency)}</span>
-        <span className="muted">{formatCurrency(max, currency)}</span>
+        <span className="muted">{formatPrice(min, currency)}</span>
+        <span className="muted">{formatPrice(max, currency)}</span>
       </div>
     </div>
   );

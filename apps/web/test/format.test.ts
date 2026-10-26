@@ -41,6 +41,14 @@ describe("UI-006 formatting", () => {
     expect(value).not.toBe(UNAVAILABLE);
   });
 
+  it("drops the minor unit for won amounts while keeping price precision", () => {
+    expect(formatCurrency(1_234_567.89, "KRW")).toBe("₩1,234,568");
+    // Other currencies keep their cents.
+    expect(formatCurrency(1234.56, "USD")).toContain("1,234.56");
+    // Unit prices remain adaptive, even in KRW.
+    expect(formatPrice(1234.56, "KRW")).toContain("1,234.56");
+  });
+
   it("signs currency amounts explicitly", () => {
     expect(formatSignedCurrency(2500, "KRW").startsWith("+")).toBe(true);
     expect(formatSignedCurrency(-2500, "KRW").startsWith("-")).toBe(true);

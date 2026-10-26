@@ -7,6 +7,7 @@ import {
   formatDate,
   formatDateTime,
   formatPercent,
+  formatPrice,
   formatQuantity,
 } from "@/lib/format";
 import type { Valuation } from "@/lib/types";
@@ -216,7 +217,7 @@ export default async function HistoryPage({
                   <td className="num">
                     {position.price === null
                       ? "—"
-                      : formatCurrency(position.price, position.priceCurrency)}
+                      : formatPrice(position.price, position.priceCurrency)}
                   </td>
                   <td className="num">
                     {position.marketValueBase === null

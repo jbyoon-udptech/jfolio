@@ -171,6 +171,7 @@ Query:
 }
 ```
 
+`providers` 는 자산당 최대 1개까지 지정할 수 있습니다.
 `assetType` 값: `STOCK | ETF | CRYPTO | FX | BOND | COMMODITY | CASH`.
 `interval` 값: `tick | 10s | 1m | 5m | 1h | 1d`.
 
@@ -188,7 +189,7 @@ Query:
 
 > **한국 종목 Yahoo 심볼**: `market` 이 `KRX`/`KOSPI`/`KOSDAQ` 이고 `symbol` 이
 > 6자리 숫자이면 Yahoo 공급자가 조회 시 접미사(`.KS`/`.KQ`)를 자동으로 붙입니다.
-> `providers[].providerSymbol` 에 접미사를 직접 지정하면 그 값이 우선합니다.
+> `providers[0].providerSymbol` 에 접미사를 직접 지정하면 그 값이 우선합니다.
 > `KRX` 는 KOSPI/KOSDAQ 을 구분하지 못하므로 두 후보를 순서대로 시도하고,
 > 돌려받은 `instrumentType` 이 자산 유형과 맞지 않으면 다음 후보를 사용합니다.
 
@@ -260,8 +261,11 @@ DIVIDEND | INTEREST | FEE | SPLIT | ADJUSTMENT`. `currency` 는 선택이며
 (예: `{"quantity": 12}` 는 수량만 바꾸고 `price`/`fee`/`memo` 는 유지),
 존재하지 않는 거래는 `404` 를 반환합니다. 대시보드의 `/transactions`
 화면에서 각 행의 `수정`/`삭제` 로 동일한 동작을 수행할 수 있습니다.
-거래의 `portfolioId`/`instrumentId` 변경은 통화 정합성 문제로 UI 에서는
-제공하지 않습니다(잘못된 자산은 삭제 후 재등록).
+`portfolioId` 는 다른 포트폴리오로 변경할 수 있으며, 존재하지 않는
+포트폴리오를 지정하면 `404` 를 반환합니다. 포트폴리오를 변경하면 이전
+포트폴리오와 새 포트폴리오 모두에서 해당 시점 이후 스냅샷이 무효화됩니다.
+`instrumentId` 변경은 통화 정합성 문제로 UI 에서는 제공하지 않습니다
+(잘못된 자산은 삭제 후 재등록).
 
 ---
 

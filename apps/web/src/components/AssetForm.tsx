@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/client-fetch";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AssetFields, EMPTY_ASSET_DRAFT, type AssetDraft } from "@/components/AssetFields";
-import { parseProviders } from "@/lib/instrument";
+import { normalizeProviderLink } from "@/lib/instrument";
 
 /** FR-001: register a new asset in the master list. */
 export function AssetForm() {
@@ -26,6 +26,10 @@ export function AssetForm() {
     setMessage(null);
 
     try {
+      const provider = normalizeProviderLink(
+        draft.providerId,
+        draft.providerSymbol,
+      );
       const body = {
         name: draft.name.trim(),
         symbol: draft.symbol.trim(),
@@ -34,7 +38,7 @@ export function AssetForm() {
         currency: draft.currency.trim().toUpperCase(),
         isWatchlist: draft.isWatchlist,
         isActive: draft.isActive,
-        providers: parseProviders(draft.providers),
+        providers: provider ? [provider] : [],
       };
       const res = await apiFetch("/api/assets", {
         method: "POST",

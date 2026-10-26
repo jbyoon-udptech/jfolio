@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/client-fetch";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { Option } from "@/components/TransactionForm";
 import type { Transaction } from "@/lib/types";
 import {
   formatCurrency,
@@ -30,18 +31,23 @@ const TRANSACTION_TYPES = [
 /**
  * FR-033 / FR-034: a ledger row that can be edited in place or deleted.
  *
- * The portfolio and instrument are intentionally fixed: changing the asset of
- * an existing entry would leave the stored currency inconsistent with the new
- * instrument. Delete the row and record it again instead.
+ * The portfolio can be reassigned. The instrument is intentionally fixed:
+ * changing the asset of an existing entry would leave the stored currency
+ * inconsistent with the new instrument. Delete the row and record it again
+ * instead.
  */
 export function TransactionRow({
   transaction,
   name,
   symbol,
+  portfolioName,
+  portfolioOptions,
 }: {
   transaction: Transaction;
   name?: string;
   symbol?: string;
+  portfolioName?: string;
+  portfolioOptions: Option[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -49,6 +55,7 @@ export function TransactionRow({
   const [error, setError] = useState<string | null>(null);
 
   const [type, setType] = useState(transaction.type);
+  const [portfolioId, setPortfolioId] = useState(transaction.portfolioId);
   const [timestamp, setTimestamp] = useState(toLocalDateTimeInput(transaction.timestamp));
   const [quantity, setQuantity] = useState(String(transaction.quantity));
   const [price, setPrice] = useState(String(transaction.price));
@@ -57,6 +64,7 @@ export function TransactionRow({
 
   function reset() {
     setType(transaction.type);
+    setPortfolioId(transaction.portfolioId);
     setTimestamp(toLocalDateTimeInput(transaction.timestamp));
     setQuantity(String(transaction.quantity));
     setPrice(String(transaction.price));
@@ -74,6 +82,7 @@ export function TransactionRow({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           type,
+          portfolioId,
           // `datetime-local` has no zone; interpret it as the browser's local time.
           timestamp: timestamp ? new Date(timestamp).toISOString() : transaction.timestamp,
           quantity: Number(quantity),
@@ -136,6 +145,32 @@ export function TransactionRow({
     </>
   );
 
+  const portfolioCell = (
+    <td>
+      {portfolioName ? (
+        <a href={`/portfolio?portfolioId=${transaction.portfolioId}`}>{portfolioName}</a>
+      ) : (
+        <span className="muted">—</span>
+      )}
+    </td>
+  );
+
+  const portfolioEditCell = (
+    <td>
+      <select
+        value={portfolioId}
+        onChange={(event) => setPortfolioId(event.target.value)}
+        aria-label="포트폴리오"
+      >
+        {portfolioOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </td>
+  );
+
   if (editing) {
     return (
       <tr>
@@ -160,6 +195,7 @@ export function TransactionRow({
             ))}
           </select>
         </td>
+        {portfolioOptions.length > 0 ? portfolioEditCell : portfolioCell}
         {instrumentCells}
         <td className="num">
           <input
@@ -231,6 +267,7 @@ export function TransactionRow({
     <tr>
       <td className="muted">{formatDateTime(transaction.timestamp)}</td>
       <td>{transaction.type}</td>
+      {portfolioCell}
       {instrumentCells}
       <td className="num">{formatQuantity(transaction.quantity)}</td>
       <td className="num">{formatPrice(transaction.price, transaction.currency)}</td>

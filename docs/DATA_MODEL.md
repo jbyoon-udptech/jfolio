@@ -34,7 +34,7 @@ MongoDB native driver 사용. 컬렉션 정의는
 
 ```
 { instrumentId, symbol, name, assetType, market, currency,
-  providers: [{ providerId, providerSymbol }],
+  providers: [{ providerId, providerSymbol }], // 최대 1개
   isActive, isWatchlist, createdAt, updatedAt }
 ```
 
@@ -98,6 +98,7 @@ UserIdentity { identityId, userId, provider, providerUserId, createdAt }
   있고, ID로는 계속 접근할 수 있습니다.
 - 기본 포트폴리오는 숨길 수 없으며, 숨김 포트폴리오를 기본으로 지정하면 자동으로
   다시 표시됩니다.
+- 거래 내역 화면에서도 숨김 포트폴리오의 거래는 표시하지 않습니다.
 
 ### Transaction
 
@@ -113,6 +114,8 @@ UserIdentity { identityId, userId, provider, providerUserId, createdAt }
   목표 절대 수량.
 - 거래 생성/수정/삭제 시 `asOf` 이후 스냅샷을 무효화하고 포지션을 재계산합니다
   (FR-034).
+- 거래의 `portfolioId`를 변경하면 이전 포트폴리오와 새 포트폴리오 모두에서
+  해당 시점 이후 스냅샷을 무효화합니다.
 
 ### Position (파생)
 

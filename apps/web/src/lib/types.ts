@@ -14,6 +14,7 @@ export interface Instrument {
   currency: string;
   isActive: boolean;
   isWatchlist: boolean;
+  /** Provider links (at most one per asset). */
   providers: Array<{ providerId: string; providerSymbol: string }>;
   createdAt: string;
   updatedAt: string;

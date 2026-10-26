@@ -7,17 +7,19 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AssetFields, type AssetDraft } from "@/components/AssetFields";
 import { formatDateTime, formatPrice } from "@/lib/format";
-import { formatProviders, parseProviders } from "@/lib/instrument";
+import { normalizeProviderLink, type ProviderLink } from "@/lib/instrument";
 import type { Instrument } from "@/lib/types";
 
 function toDraft(instrument: Instrument): AssetDraft {
+  const provider = instrument.providers[0];
   return {
     name: instrument.name,
     symbol: instrument.symbol,
     assetType: instrument.assetType,
     market: instrument.market,
     currency: instrument.currency,
-    providers: formatProviders(instrument.providers),
+    providerId: provider?.providerId ?? "",
+    providerSymbol: provider ? provider.providerSymbol || instrument.symbol : "",
     isWatchlist: instrument.isWatchlist,
     isActive: instrument.isActive,
   };
@@ -72,9 +74,13 @@ export function AssetRow({ instrument }: { instrument: Instrument }) {
   }
 
   async function save() {
-    let providers;
+    let providers: ProviderLink[];
     try {
-      providers = parseProviders(draft.providers);
+      const provider = normalizeProviderLink(
+        draft.providerId,
+        draft.providerSymbol,
+      );
+      providers = provider ? [provider] : [];
     } catch (err) {
       setError(err instanceof Error ? err.message : "공급자 형식 오류");
       return;
@@ -163,6 +169,15 @@ export function AssetRow({ instrument }: { instrument: Instrument }) {
       {editing ? (
         <tr>
           <td colSpan={9} style={{ background: "var(--panel-2)" }}>
+            {instrument.providers.length > 1 ? (
+              <p
+                className="muted"
+                style={{ marginTop: 0, marginBottom: 8, fontSize: 12 }}
+              >
+                이 자산에는 공급자가 여러 개 연결되어 있습니다. 저장하면 첫 번째
+                공급자만 유지됩니다.
+              </p>
+            ) : null}
             <AssetFields draft={draft} onChange={onChange} />
             <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
               <button type="button" className="primary" disabled={pending} onClick={save}>

@@ -5,8 +5,8 @@ export type DataInterval = (typeof DATA_INTERVALS)[number];
 
 /**
  * FR-001 / FR-002: A tradable instrument. The internal `instrumentId` is
- * decoupled from any external provider symbol so the same instrument can be
- * sourced from multiple providers.
+ * decoupled from the external provider symbol. An instrument links to at most
+ * one provider; the API schema enforces the limit.
  */
 export interface InstrumentProviderLink {
   providerId: string;
@@ -24,6 +24,7 @@ export interface Instrument {
   isActive: boolean;
   /** FR-003: watchlist flag, independent of ownership. */
   isWatchlist: boolean;
+  /** Provider link (at most one per instrument). */
   providers: InstrumentProviderLink[];
   createdAt: Date;
   updatedAt: Date;

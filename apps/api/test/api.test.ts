@@ -146,6 +146,25 @@ describe("8.3 asset master", () => {
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
+  it("rejects more than one provider link per asset", async () => {
+    const { container } = createTestContext();
+    const res = await request(appFor(container))
+      .post(`${BASE}/assets`)
+      .send({
+        symbol: "MULTI",
+        name: "Multiple providers",
+        assetType: "STOCK",
+        market: "NASDAQ",
+        currency: "USD",
+        providers: [
+          { providerId: "yahoo", providerSymbol: "MULTI" },
+          { providerId: "binance", providerSymbol: "MULTI" },
+        ],
+      });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("returns 404 for a missing instrument", async () => {
     const { container } = createTestContext();
     expect((await request(appFor(container)).get(`${BASE}/assets/ins_missing`)).status).toBe(404);
@@ -545,6 +564,83 @@ describe("8.5 transactions", () => {
 
     expect((await request(app).delete(`${BASE}/transactions/${txId}`)).status).toBe(204);
     expect((await request(app).get(`${BASE}/transactions/${txId}`)).status).toBe(404);
+  });
+
+  it("moves a transaction to another portfolio and invalidates both snapshot sets", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+    const other = await container.portfolios.create({
+      name: "Other Portfolio",
+      baseCurrency: "KRW",
+    });
+
+    const created = await request(app)
+      .post(`${BASE}/transactions`)
+      .send({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp: FIXED_NOW.toISOString(),
+        quantity: 10,
+        price: 100,
+      });
+    expect(created.status).toBe(201);
+
+    await container.snapshots.createSnapshot({
+      portfolioId: portfolio.portfolioId,
+      snapshotType: "DAILY",
+      asOf: FIXED_NOW,
+    });
+    await container.snapshots.createSnapshot({
+      portfolioId: other.portfolioId,
+      snapshotType: "DAILY",
+      asOf: FIXED_NOW,
+    });
+
+    const patched = await request(app)
+      .patch(`${BASE}/transactions/${created.body.transactionId}`)
+      .send({ portfolioId: other.portfolioId });
+
+    expect(patched.status).toBe(200);
+    expect(patched.body.portfolioId).toBe(other.portfolioId);
+    expect(
+      (await request(app).get(`${BASE}/transactions?portfolioId=${portfolio.portfolioId}`)).body
+        .total,
+    ).toBe(0);
+    expect(
+      (await request(app).get(`${BASE}/transactions?portfolioId=${other.portfolioId}`)).body.total,
+    ).toBe(1);
+    expect(await container.snapshots.list(portfolio.portfolioId)).toHaveLength(0);
+    expect(await container.snapshots.list(other.portfolioId)).toHaveLength(0);
+  });
+
+  it("returns 404 when moving a transaction to an unknown portfolio", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+
+    const created = await request(app)
+      .post(`${BASE}/transactions`)
+      .send({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp: FIXED_NOW.toISOString(),
+        quantity: 10,
+        price: 100,
+      });
+    expect(created.status).toBe(201);
+
+    const patched = await request(app)
+      .patch(`${BASE}/transactions/${created.body.transactionId}`)
+      .send({ portfolioId: "pf_missing" });
+    expect(patched.status).toBe(404);
+
+    const stored = await request(app).get(
+      `${BASE}/transactions/${created.body.transactionId}`,
+    );
+    expect(stored.body.portfolioId).toBe(portfolio.portfolioId);
   });
 
   it("returns 404 when the portfolio or instrument does not exist", async () => {

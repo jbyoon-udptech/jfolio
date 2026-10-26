@@ -25,6 +25,11 @@ export interface Option {
   label: string;
 }
 
+export interface OptionGroup {
+  label: string;
+  options: Option[];
+}
+
 /** FR-033: ledger entry form. Posts to the Next.js proxy route. */
 export function TransactionForm({
   portfolios,
@@ -32,7 +37,7 @@ export function TransactionForm({
   defaultPortfolioId,
 }: {
   portfolios: Option[];
-  instruments: Option[];
+  instruments: OptionGroup[];
   /** Pre-selects a portfolio, e.g. when the ledger is filtered to one. */
   defaultPortfolioId?: string;
 }) {
@@ -108,10 +113,14 @@ export function TransactionForm({
             <option value="" disabled>
               선택
             </option>
-            {instruments.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+            {instruments.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>

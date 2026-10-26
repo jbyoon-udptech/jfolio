@@ -57,10 +57,19 @@ export class TransactionService {
   async update(transactionId: string, patch: Partial<Transaction>): Promise<Transaction> {
     const existing = await this.repos.transactions.findById(transactionId);
     if (!existing) throw new NotFoundError(`Transaction ${transactionId} not found`);
+    if (patch.portfolioId) {
+      const portfolio = await this.repos.portfolios.findById(patch.portfolioId);
+      if (!portfolio) throw new NotFoundError(`Portfolio ${patch.portfolioId} not found`);
+    }
     const updated = await this.repos.transactions.update(transactionId, patch);
     if (!updated) throw new NotFoundError(`Transaction ${transactionId} not found`);
     const earliest = new Date(Math.min(existing.timestamp.getTime(), updated.timestamp.getTime()));
-    await this.invalidateSnapshots(updated.portfolioId, earliest);
+    // Moving a transaction changes valuations in both the old and the new
+    // portfolio, so invalidate snapshots for each of them.
+    const portfolioIds = new Set([existing.portfolioId, updated.portfolioId]);
+    for (const portfolioId of portfolioIds) {
+      await this.invalidateSnapshots(portfolioId, earliest);
+    }
     return updated;
   }
 

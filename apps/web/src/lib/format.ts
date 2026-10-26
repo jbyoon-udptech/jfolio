@@ -26,6 +26,9 @@ export function formatNumber(
   }).format(value);
 }
 
+/** Currencies whose display amounts have no minor unit. */
+const ZERO_DECIMAL_CURRENCIES = new Set(["KRW", "JPY"]);
+
 /**
  * Currency-aware amount. Falls back to a plain "<amount> <CODE>" string for
  * non-ISO codes (e.g. USDT) that `Intl.NumberFormat` rejects.
@@ -36,7 +39,8 @@ export function formatCurrency(
   options: { maximumFractionDigits?: number } = {},
 ): string {
   if (!isFiniteNumber(value)) return UNAVAILABLE;
-  const maximumFractionDigits = options.maximumFractionDigits ?? 2;
+  const maximumFractionDigits =
+    options.maximumFractionDigits ?? (ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2);
   try {
     return new Intl.NumberFormat("ko-KR", {
       style: "currency",

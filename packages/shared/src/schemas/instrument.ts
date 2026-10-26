@@ -14,7 +14,8 @@ export const createInstrumentSchema = z.object({
   currency: currencyCode,
   isActive: z.boolean().optional().default(true),
   isWatchlist: z.boolean().optional().default(false),
-  providers: z.array(providerLinkSchema).optional().default([]),
+  // An instrument links to at most one provider.
+  providers: z.array(providerLinkSchema).max(1).optional().default([]),
 });
 export type CreateInstrumentDto = z.infer<typeof createInstrumentSchema>;
 
