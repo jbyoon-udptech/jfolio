@@ -21,6 +21,9 @@ export function createTestConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     CRYPTO_PROVIDER: "mock",
     FX_PROVIDER: "mock",
     COLLECTION_SCHEDULER_ENABLED: "false",
+    // Background history backfill is opt-in for tests; when enabled they wait
+    // on container.backfill.waitForIdle() before asserting provider data.
+    HISTORY_BACKFILL_ENABLED: "false",
     API_AUTH_TOKEN: "",
     // Existing route tests predate user login and call the API anonymously.
     AUTH_REQUIRED: "false",

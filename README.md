@@ -133,6 +133,30 @@ curl -s http://127.0.0.1:3001/health
 curl -s http://127.0.0.1:3001/api/v1/dashboard
 ```
 
+### 3.3 과거 시세/환율 백필
+
+실시간 수집은 최신 시세만 저장하므로, 새 자산을 추가하면 대시보드의 과거
+평가액이 `UNAVAILABLE`(빈 값)로 보일 수 있습니다. 아래 명령으로 일별
+시세/환율 이력을 채웁니다.
+
+```bash
+# 모든 활성 자산: 각 자산의 첫 거래일 전날부터 (거래가 없으면 HISTORY_BACKFILL_DAYS)
+yarn backfill:history
+
+# 최근 30일만
+yarn backfill:history --days 30
+
+# 특정 기간 / 자산군 / 자산
+yarn backfill:history --from 2025-01-01 --to 2026-10-26
+yarn backfill:history --asset-type STOCK,ETF
+yarn backfill:history --instrument ins_abc123 --from 2025-01-01
+```
+
+`POST /api/v1/assets` 로 새 자산을 만들면 동일한 백필이 **백그라운드**로
+자동 실행됩니다. 자산 생성 응답은 공급자 지연을 기다리지 않으며, 백필
+실패는 서버 로그에만 남고 생성은 성공합니다. 자동 백필을 끄려면
+`HISTORY_BACKFILL_ENABLED=false` 로 설정하세요.
+
 ---
 
 ## 4. 환경 변수
@@ -170,6 +194,8 @@ curl -s http://127.0.0.1:3001/api/v1/dashboard
 | `FX_COLLECTION_INTERVAL_SECONDS` | `60` | 환율 수집 주기 |
 | `STOCK_PROVIDER` / `CRYPTO_PROVIDER` / `FX_PROVIDER` | `live` | 자산군별 `live` 또는 `mock` |
 | `COLLECTION_SCHEDULER_ENABLED` | `true` | API 기동 시 스케줄러 시작 |
+| `HISTORY_BACKFILL_ENABLED` | `true` (test: `false`) | 새 자산 생성 시 과거 일별 시세/환율 백그라운드 백필 |
+| `HISTORY_BACKFILL_DAYS` | `365` | 거래가 없는 자산의 기본 백필 기간(일) |
 | `HOURLY_SNAPSHOT_ENABLED` / `DAILY_SNAPSHOT_ENABLED` | `true` | 스냅샷 생성 |
 | `STABLECOIN_USD_PEGS` | `USDT,USDC,BUSD,DAI,TUSD,FDUSD` | USD 1:1 페그로 취급할 스테이블코인 |
 | `API_BASE_URL` (web) | `http://127.0.0.1:3001/api/v1` | 웹이 호출할 API 주소 (`AUTH_URL` 파생 기준) |
@@ -191,6 +217,7 @@ curl -s http://127.0.0.1:3001/api/v1/dashboard
 | `yarn seed` | 기준 상품/데모 포트폴리오 시드 + 1회 수집 |
 | `yarn create-user` | 로그인 계정 생성 (관리자/CLI 전용) |
 | `yarn collect:once` | 1회 수집 실행 |
+| `yarn backfill:history` | 과거 일별 시세/환율 백필 (`--from`, `--to`, `--days`, `--asset-type`, `--instrument`) |
 
 ---
 

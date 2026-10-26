@@ -24,6 +24,7 @@
     "typecheck": "yarn workspace @jfolio/shared typecheck && yarn workspace @jfolio/api typecheck && yarn workspace @jfolio/web typecheck",
     "lint": "eslint . --ext .ts,.tsx",
     "collect:once": "yarn workspace @jfolio/api collect:once",
+    "backfill:history": "yarn workspace @jfolio/api backfill:history",
     "create-user": "yarn workspace @jfolio/api create-user",
     "seed": "yarn workspace @jfolio/api seed"
   },

@@ -4,6 +4,7 @@ import { createProviderRegistry, type ProviderRegistry } from "./providers/regis
 import type { Repositories } from "./repositories/types";
 import { CollectionService } from "./services/collection.service";
 import { DashboardService } from "./services/dashboard.service";
+import { HistoricalBackfillService } from "./services/historical-backfill.service";
 import { InstrumentService } from "./services/instrument.service";
 import { MarketDataService } from "./services/market-data.service";
 import { PortfolioService } from "./services/portfolio.service";
@@ -28,6 +29,7 @@ export interface Container {
   signals: SignalService;
   snapshots: SnapshotService;
   collection: CollectionService;
+  backfill: HistoricalBackfillService;
   dashboard: DashboardService;
   system: SystemService;
 }
@@ -47,6 +49,13 @@ export function createContainer(
   const valuation = new ValuationService(repos, marketData);
   const signals = new SignalService(repos, now);
   const collection = new CollectionService(repos, providers, marketData, signals, now);
+  const backfill = new HistoricalBackfillService(
+    repos,
+    providers,
+    collection,
+    config.collection.historyBackfill.days,
+    now,
+  );
 
   return {
     config,
@@ -62,6 +71,7 @@ export function createContainer(
     signals,
     snapshots: new SnapshotService(repos, valuation),
     collection,
+    backfill,
     dashboard: new DashboardService(repos, valuation, now),
     system: new SystemService(repos, providers, config.collection),
   };

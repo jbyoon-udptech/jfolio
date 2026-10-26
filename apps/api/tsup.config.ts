@@ -1,7 +1,12 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/cli/seed.ts", "src/cli/create-user.ts"],
+  entry: [
+    "src/index.ts",
+    "src/cli/seed.ts",
+    "src/cli/create-user.ts",
+    "src/cli/backfill.ts",
+  ],
   format: ["cjs"],
   target: "node20",
   platform: "node",

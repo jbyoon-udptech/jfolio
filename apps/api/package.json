@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "collect:once": "tsx src/cli/collect-once.ts",
+    "backfill:history": "tsx src/cli/backfill.ts",
     "create-user": "tsx src/cli/create-user.ts",
     "seed": "tsx src/cli/seed.ts"
   },

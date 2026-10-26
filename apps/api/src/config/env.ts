@@ -92,6 +92,12 @@ export interface AppConfig {
       CRYPTO: ProviderMode;
       FX: ProviderMode;
     };
+    historyBackfill: {
+      /** Backfill daily history in the background when an asset is created. */
+      enabled: boolean;
+      /** Fallback lookback when an instrument has no transactions yet. */
+      days: number;
+    };
   };
   snapshot: {
     hourlyEnabled: boolean;
@@ -189,6 +195,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         STOCK: str(env.STOCK_PROVIDER, "live") as ProviderMode,
         CRYPTO: str(env.CRYPTO_PROVIDER, "live") as ProviderMode,
         FX: str(env.FX_PROVIDER, "live") as ProviderMode,
+      },
+      historyBackfill: {
+        // Tests must remain deterministic unless they explicitly opt in.
+        enabled: bool(env.HISTORY_BACKFILL_ENABLED, nodeEnv !== "test"),
+        days: Math.max(1, Math.floor(num(env.HISTORY_BACKFILL_DAYS, 365))),
       },
     },
     snapshot: {

@@ -43,6 +43,25 @@ export function createAssetsRouter(container: Container): Router {
       const body = parseBody(createInstrumentSchema, req.body);
       const instrument = await container.instruments.create(body);
       res.status(201).json(instrument);
+
+      // History is non-essential for the create response. Backfill it in the
+      // background so a slow provider never delays or fails asset creation.
+      if (container.config.collection.historyBackfill.enabled) {
+        void container.backfill
+          .enqueue(instrument)
+          .then((result) => {
+            if (result.status === "ERROR") {
+              // eslint-disable-next-line no-console
+              console.warn(
+                `[backfill] ${instrument.symbol} failed: ${result.message ?? "unknown error"}`,
+              );
+            }
+          })
+          .catch((error) => {
+            // eslint-disable-next-line no-console
+            console.error(`[backfill] ${instrument.symbol} failed:`, error);
+          });
+      }
     }),
   );
 
