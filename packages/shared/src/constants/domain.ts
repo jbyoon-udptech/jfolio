@@ -68,6 +68,12 @@ export const COLLECTION_JOB_STATUSES = [
 export const DEFAULT_BASE_CURRENCY = "KRW" as const;
 export const DEFAULT_TIMEZONE = "Asia/Seoul" as const;
 
+/**
+ * Sentinel portfolio id for dashboard queries that aggregate every visible
+ * portfolio. Real portfolio ids use the `pf_` prefix.
+ */
+export const ALL_PORTFOLIOS_ID = "all" as const;
+
 /** Currencies used by the built-in providers / seed data. */
 export const SUPPORTED_CURRENCIES = ["KRW", "USD", "JPY", "EUR", "USDT"] as const;
 

@@ -111,12 +111,14 @@ x-api-key: <token>
 ### `GET /api/v1/dashboard`
 
 `portfolioId` 가 없으면 사용자의 기본 포트폴리오를 사용하며, 없으면 생성합니다.
+`portfolioId=all` 이면 숨김 포트폴리오를 제외한 모든 포트폴리오를 기본
+포트폴리오의 기준 통화로 합산합니다.
 
 Query:
 
 | 이름 | 타입 | 설명 |
 | --- | --- | --- |
-| `portfolioId` | string | 조회할 포트폴리오 |
+| `portfolioId` | string | 조회할 포트폴리오. `all` 이면 전체(숨김 제외) 합계 |
 | `baseCurrency` | string | 기준 통화 (기본 `KRW`) |
 
 응답(예):
@@ -144,6 +146,15 @@ Query:
 
 > `dailyChange` / `dailyChangeRate` 는 현재 또는 24시간 전 기준 평가금액이
 > `UNAVAILABLE` 이면 `null` 입니다 (0으로 표시하지 않음, UI-006).
+
+### `GET /api/v1/dashboard/history`
+
+대시보드 차트용 평가금액 시계열입니다. `portfolioId=all` 이거나 생략하면 숨김
+포트폴리오를 제외한 전체 포트폴리오를 하나의 기준 통화로 합산합니다. 한
+포트폴리오라도 해당 시점 평가가 불가하면 그 시점 값은 `null` 입니다.
+
+Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
+(`hourly | daily`, 기본 `daily`).
 
 ---
 

@@ -12,13 +12,16 @@ export function PortfolioSelect({
   currentId,
   extraQuery,
   allOptionLabel,
+  allOptionValue = "",
 }: {
   portfolios: Option[];
   currentId: string;
   /** Already-encoded query string (no leading `?`) to keep, e.g. "period=1M". */
   extraQuery?: string;
-  /** When set, adds an option that clears the portfolio filter (value ""). */
+  /** When set, adds an option at the top of the list. */
   allOptionLabel?: string;
+  /** Query value used by the all option; empty clears the portfolio filter. */
+  allOptionValue?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -38,7 +41,9 @@ export function PortfolioSelect({
         포트폴리오
       </span>
       <select value={currentId} onChange={onChange}>
-        {allOptionLabel !== undefined ? <option value="">{allOptionLabel}</option> : null}
+        {allOptionLabel !== undefined ? (
+          <option value={allOptionValue}>{allOptionLabel}</option>
+        ) : null}
         {portfolios.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

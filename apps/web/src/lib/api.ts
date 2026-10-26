@@ -133,6 +133,22 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 export const api = {
   dashboard: (params: { portfolioId?: string; baseCurrency?: string } = {}) =>
     request<Dashboard>(`/dashboard${query(params)}`),
+  dashboardHistory: (
+    params: {
+      portfolioId?: string;
+      from?: string;
+      to?: string;
+      interval?: string;
+      baseCurrency?: string;
+    } = {},
+  ) =>
+    request<{
+      portfolioId: string;
+      interval: string;
+      from: string;
+      to: string;
+      items: HistoryPoint[];
+    }>(`/dashboard/history${query(params)}`),
 
   portfolios: (params: { includeHidden?: boolean } = {}) =>
     request<ListResponse<Portfolio>>(

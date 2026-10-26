@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
 import { AllocationList } from "@/components/AllocationList";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
@@ -38,6 +39,7 @@ export default async function DashboardPage({
   // A hidden portfolio must not remain in view; fall back to the default one.
   if (
     params.portfolioId &&
+    params.portfolioId !== ALL_PORTFOLIOS_ID &&
     portfoliosResult.data &&
     !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
   ) {
@@ -46,7 +48,8 @@ export default async function DashboardPage({
 
   const range = periodRange(period);
   const historyResult = await safe(() =>
-    api.history(dashboard.portfolioId, {
+    api.dashboardHistory({
+      portfolioId: dashboard.portfolioId,
       from: range.from.toISOString(),
       to: range.to.toISOString(),
       interval: range.interval,
@@ -74,6 +77,8 @@ export default async function DashboardPage({
               portfolios={portfolioOptions}
               currentId={dashboard.portfolioId}
               extraQuery={params.period ? `period=${params.period}` : undefined}
+              allOptionLabel="All"
+              allOptionValue={ALL_PORTFOLIOS_ID}
             />
           ) : null}
           <StatusBadge status={dashboard.dataStatus} />
@@ -225,8 +230,9 @@ export default async function DashboardPage({
       </div>
 
       <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
-        포트폴리오 {dashboard.portfolioId} · 미실현 수익률{" "}
-        {formatPercent(dashboard.unrealizedReturn)}
+        포트폴리오{" "}
+        {dashboard.portfolioId === ALL_PORTFOLIOS_ID ? "All" : dashboard.portfolioId} ·
+        미실현 수익률 {formatPercent(dashboard.unrealizedReturn)}
       </p>
     </>
   );

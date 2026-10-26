@@ -1,7 +1,14 @@
-import type { DataStatus, SignalEvent, ValuedPosition } from "@jfolio/shared";
-import { divide, multiply, subtract } from "../domain/money";
+import {
+  ALL_PORTFOLIOS_ID,
+  type DataStatus,
+  type SignalEvent,
+  type ValuedPosition,
+} from "@jfolio/shared";
+import { add, divide, multiply, round, subtract } from "../domain/money";
 import type { Repositories } from "../repositories/types";
-import { ValuationService } from "./valuation.service";
+import { ValuationService, type ValuationResult } from "./valuation.service";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface AllocationSlice {
   key: string;
@@ -28,6 +35,12 @@ export interface DashboardResult {
   lastDataUpdatedAt: Date | null;
 }
 
+export interface DashboardHistoryPoint {
+  asOf: Date;
+  totalAssetValue: number | null;
+  dataStatus: DataStatus;
+}
+
 /**
  * UI-001 / FR-014: Aggregated dashboard view. Uses only stored data — it never
  * calls external providers (NFR-001).
@@ -50,14 +63,144 @@ export class DashboardService {
     });
     const previous = await this.valuation.valuate(portfolioId, {
       baseCurrency: options.baseCurrency,
-      asOf: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+      asOf: new Date(now.getTime() - DAY_MS),
     });
+    return this.toDashboard(portfolioId, current, previous);
+  }
 
+  /**
+   * UI-001: value every visible portfolio in one common base currency. Hidden
+   * portfolios are resolved by the route and therefore never contribute here.
+   */
+  async getDashboardForAll(
+    portfolioIds: string[],
+    options: { baseCurrency: string },
+  ): Promise<DashboardResult> {
+    const now = this.now();
+    const current = await this.aggregateValuations(portfolioIds, {
+      baseCurrency: options.baseCurrency,
+      asOf: now,
+    });
+    const previous = await this.aggregateValuations(portfolioIds, {
+      baseCurrency: options.baseCurrency,
+      asOf: new Date(now.getTime() - DAY_MS),
+    });
+    return this.toDashboard(ALL_PORTFOLIOS_ID, current, previous);
+  }
+
+  /**
+   * FR-053: aggregate history for the `All` dashboard. A point is unavailable
+   * when any portfolio is unavailable at that time, so the total is never
+   * understated by a partial series.
+   */
+  async getHistoryForAll(
+    portfolioIds: string[],
+    options: {
+      baseCurrency: string;
+      from: Date;
+      to: Date;
+      interval?: "hourly" | "daily";
+    },
+  ): Promise<DashboardHistoryPoint[]> {
+    if (portfolioIds.length === 0) return [];
+    const series = await Promise.all(
+      portfolioIds.map((portfolioId) => this.valuation.historySeries(portfolioId, options)),
+    );
+    const first = series[0];
+    if (!first) return [];
+
+    return first.map((point, index) => {
+      const points = series.map((items) => items[index]);
+      const values = points.map((item) => item?.totalAssetValue);
+      const complete = values.every(
+        (value): value is number => value !== null && value !== undefined,
+      );
+      return {
+        asOf: point.asOf,
+        totalAssetValue: complete ? round(add(...values), 2) : null,
+        dataStatus: mergeDataStatus(
+          points.map((item) => item?.dataStatus ?? "NO_DATA"),
+        ),
+      };
+    });
+  }
+
+  private async aggregateValuations(
+    portfolioIds: string[],
+    options: { baseCurrency: string; asOf: Date },
+  ): Promise<ValuationResult> {
+    if (portfolioIds.length === 0) {
+      return {
+        portfolioId: ALL_PORTFOLIOS_ID,
+        baseCurrency: options.baseCurrency,
+        asOf: options.asOf,
+        dataStatus: "NO_DATA",
+        totalAssetValue: 0,
+        totalCostBasis: 0,
+        unrealizedPnL: 0,
+        unrealizedReturn: null,
+        positions: [],
+        cashBalances: [],
+        unavailableCount: 0,
+        warnings: [],
+      };
+    }
+
+    const results = await Promise.all(
+      portfolioIds.map((portfolioId) =>
+        this.valuation.valuate(portfolioId, {
+          baseCurrency: options.baseCurrency,
+          asOf: options.asOf,
+        }),
+      ),
+    );
+
+    const totalAssetValue = round(
+      add(...results.map((result) => result.totalAssetValue ?? 0)),
+      2,
+    );
+    const totalCostBasis = round(
+      add(...results.map((result) => result.totalCostBasis ?? 0)),
+      2,
+    );
+    const unrealizedPnL = round(subtract(totalAssetValue, totalCostBasis), 2);
+    const unrealizedReturn =
+      totalCostBasis === 0
+        ? null
+        : round(
+            multiply(divide(unrealizedPnL, totalCostBasis) as number, 100),
+            4,
+          );
+
+    return {
+      portfolioId: ALL_PORTFOLIOS_ID,
+      baseCurrency: results[0]?.baseCurrency ?? options.baseCurrency,
+      asOf: options.asOf,
+      dataStatus: mergeDataStatus(results.map((result) => result.dataStatus)),
+      totalAssetValue,
+      totalCostBasis,
+      unrealizedPnL,
+      unrealizedReturn,
+      positions: results.flatMap((result) => result.positions),
+      cashBalances: results.flatMap((result) => result.cashBalances),
+      unavailableCount: results.reduce(
+        (total, result) => total + result.unavailableCount,
+        0,
+      ),
+      warnings: results.flatMap((result) => result.warnings),
+    };
+  }
+
+  private async toDashboard(
+    portfolioId: string,
+    current: ValuationResult,
+    previous: ValuationResult,
+  ): Promise<DashboardResult> {
     const allocationByAssetType = buildAllocation(current.positions, (p) => p.assetType);
     const allocationByCurrency = buildAllocation(current.positions, (p) => p.currency);
 
-    const topHoldings = [...current.positions]
-      .filter((p) => p.marketValueBase !== null && p.assetType !== "CASH")
+    const topHoldings = mergeAvailablePositions(current.positions)
+      .filter((p) => p.assetType !== "CASH")
       .sort((a, b) => (b.marketValueBase ?? 0) - (a.marketValueBase ?? 0))
       .slice(0, 10);
 
@@ -103,6 +246,64 @@ export class DashboardService {
       lastDataUpdatedAt,
     };
   }
+}
+
+function mergeDataStatus(statuses: DataStatus[]): DataStatus {
+  if (statuses.length === 0) return "NO_DATA";
+  if (statuses.includes("UNAVAILABLE")) return "UNAVAILABLE";
+  if (statuses.includes("ERROR")) return "ERROR";
+  if (statuses.includes("STALE")) return "STALE";
+  if (statuses.includes("DELAYED")) return "DELAYED";
+  if (statuses.every((status) => status === "NO_DATA")) return "NO_DATA";
+  return "NORMAL";
+}
+
+/**
+ * Combine the same instrument held in multiple portfolios so `topHoldings` is a
+ * true cross-portfolio ranking rather than duplicated rows.
+ */
+function mergeAvailablePositions(positions: ValuedPosition[]): ValuedPosition[] {
+  const merged = new Map<string, ValuedPosition>();
+  for (const position of positions) {
+    if (position.marketValueBase === null) continue;
+    const existing = merged.get(position.instrumentId);
+    if (!existing) {
+      merged.set(position.instrumentId, { ...position });
+      continue;
+    }
+
+    const costBasisBase = sumNullable(existing.costBasisBase, position.costBasisBase);
+    const unrealizedPnL = sumNullable(existing.unrealizedPnL, position.unrealizedPnL);
+    merged.set(position.instrumentId, {
+      ...existing,
+      quantity: add(existing.quantity, position.quantity),
+      price: existing.price ?? position.price,
+      priceTimestamp: latestDate(existing.priceTimestamp, position.priceTimestamp),
+      fxRateToBase: existing.fxRateToBase ?? position.fxRateToBase,
+      marketValue: sumNullable(existing.marketValue, position.marketValue),
+      marketValueBase: sumNullable(existing.marketValueBase, position.marketValueBase),
+      costBasis: sumNullable(existing.costBasis, position.costBasis),
+      costBasisBase,
+      unrealizedPnL,
+      unrealizedReturn:
+        costBasisBase === null || costBasisBase === 0 || unrealizedPnL === null
+          ? null
+          : round(multiply(divide(unrealizedPnL, costBasisBase) as number, 100), 4),
+      status: mergeDataStatus([existing.status, position.status]),
+      statusReason: existing.statusReason ?? position.statusReason,
+    });
+  }
+  return [...merged.values()];
+}
+
+function sumNullable(a: number | null, b: number | null): number | null {
+  return a === null || b === null ? null : add(a, b);
+}
+
+function latestDate(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
 }
 
 function buildAllocation(

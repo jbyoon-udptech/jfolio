@@ -811,6 +811,173 @@ describe("8.2 dashboard", () => {
     expect(res.body.dailyChange).toBeNull();
     expect(res.body.dailyChangeRate).toBeNull();
   });
+
+  it("aggregates every visible portfolio for the All dashboard", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
+    // A different base currency proves the aggregate uses one common currency.
+    const second = await container.portfolios.create({ name: "Second", baseCurrency: "USD" });
+    const hidden = await container.portfolios.create({ name: "Hidden", baseCurrency: "KRW" });
+    await container.portfolios.update(hidden.portfolioId, { isHidden: true });
+
+    const a = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const b = await createInstrument(container, {
+      symbol: "BBB",
+      name: "Asset B",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+
+    await container.transactions.create({
+      portfolioId: first.portfolioId,
+      instrumentId: a.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 10,
+      price: 80,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.transactions.create({
+      portfolioId: second.portfolioId,
+      instrumentId: b.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 5,
+      price: 100,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.transactions.create({
+      portfolioId: hidden.portfolioId,
+      instrumentId: a.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 100,
+      price: 1,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.marketData.storeQuote(a, makeQuote(a, 100));
+    await container.marketData.storeQuote(b, makeQuote(b, 200));
+
+    const res = await request(app).get(`${BASE}/dashboard?portfolioId=all`);
+    expect(res.status).toBe(200);
+    expect(res.body.portfolioId).toBe("all");
+    expect(res.body.baseCurrency).toBe("KRW");
+    expect(res.body.totalAssetValue).toBe(2000);
+    expect(res.body.topHoldings).toHaveLength(2);
+    expect(
+      res.body.topHoldings.find(
+        (holding: { instrumentId: string }) => holding.instrumentId === a.instrumentId,
+      ).marketValueBase,
+    ).toBe(1000);
+  });
+
+  it("aggregates all visible portfolios for dashboard history", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
+    const second = await container.portfolios.create({ name: "Second", baseCurrency: "KRW" });
+    const hidden = await container.portfolios.create({ name: "Hidden", baseCurrency: "KRW" });
+    await container.portfolios.update(hidden.portfolioId, { isHidden: true });
+
+    const a = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const b = await createInstrument(container, {
+      symbol: "BBB",
+      name: "Asset B",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+
+    await container.transactions.create({
+      portfolioId: first.portfolioId,
+      instrumentId: a.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 10,
+      price: 80,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.transactions.create({
+      portfolioId: second.portfolioId,
+      instrumentId: b.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 5,
+      price: 100,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.transactions.create({
+      portfolioId: hidden.portfolioId,
+      instrumentId: a.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 100,
+      price: 1,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.marketData.storeQuote(a, makeQuote(a, 100));
+    await container.marketData.storeQuote(b, makeQuote(b, 200));
+
+    const at = encodeURIComponent(FIXED_NOW.toISOString());
+    const res = await request(app).get(
+      `${BASE}/dashboard/history?portfolioId=all&from=${at}&to=${at}&interval=daily`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.portfolioId).toBe("all");
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].totalAssetValue).toBe(2000);
+    expect(res.body.items[0].dataStatus).toBe("NORMAL");
+  });
+
+  it("serves dashboard history for a single portfolio", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const { portfolio, instrument } = await seedPortfolioAndInstrument(container);
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: FIXED_NOW,
+      quantity: 10,
+      price: 80,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.marketData.storeQuote(instrument, makeQuote(instrument, 100));
+
+    const at = encodeURIComponent(FIXED_NOW.toISOString());
+    const res = await request(app).get(
+      `${BASE}/dashboard/history?portfolioId=${portfolio.portfolioId}&from=${at}&to=${at}&interval=daily`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.portfolioId).toBe(portfolio.portfolioId);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].totalAssetValue).toBe(1000);
+  });
 });
 
 describe("8.7 system", () => {
