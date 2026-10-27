@@ -10,6 +10,14 @@
   --down: #4caf7d;
   --warn: #f0b429;
   --ok: #4caf7d;
+  --chart-1: #4c8dff;
+  --chart-2: #f0b429;
+  --chart-3: #4caf7d;
+  --chart-4: #ff5c5c;
+  --chart-5: #a78bfa;
+  --chart-6: #22d3ee;
+  --chart-7: #f472b6;
+  --chart-8: #a3e635;
   --radius: 10px;
 }
 
@@ -665,6 +673,67 @@ a.btn:hover {
 .chart-tooltip-value {
   display: block;
   font-variant-numeric: tabular-nums;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chart-legend-swatch {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
+.chart-tooltip-wide {
+  min-width: 190px;
+  max-width: 280px;
+  white-space: normal;
+}
+
+.chart-tooltip-rows {
+  display: grid;
+  gap: 3px;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-tooltip-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-tooltip-row .chart-tooltip-value {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.chart-tooltip-swatch {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 2px;
 }
 
 .chart-x-axis {

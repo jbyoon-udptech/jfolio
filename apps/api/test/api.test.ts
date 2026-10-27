@@ -787,6 +787,50 @@ describe("8.2 dashboard", () => {
     expect(res.body.allocationByAssetType[0].key).toBe("STOCK");
   });
 
+  it("returns every non-cash holding instead of truncating at ten", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({
+      name: "Many Holdings",
+      baseCurrency: "KRW",
+    });
+
+    for (let index = 0; index < 12; index += 1) {
+      const instrument = await createInstrument(container, {
+        symbol: `T${index}`,
+        name: `Asset ${index}`,
+        assetType: "STOCK",
+        market: "KRX",
+        currency: "KRW",
+        providers: [],
+      });
+      await container.transactions.create({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp: FIXED_NOW,
+        quantity: 1,
+        price: 10,
+        currency: "KRW",
+        fee: 0,
+      });
+      await container.marketData.storeQuote(
+        instrument,
+        makeQuote(instrument, 100 + index),
+      );
+    }
+
+    const res = await request(app).get(
+      `${BASE}/dashboard?portfolioId=${portfolio.portfolioId}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.topHoldings).toHaveLength(12);
+    expect(res.body.topHoldings[0].symbol).toBe("T11");
+    expect(
+      res.body.topHoldings.some((holding: { symbol: string }) => holding.symbol === "T0"),
+    ).toBe(true);
+  });
+
   it("reports each top holding's price change against the previous daily close", async () => {
     const { container } = createTestContext();
     const app = appFor(container);
@@ -961,6 +1005,33 @@ describe("8.2 dashboard", () => {
     expect(res.body.portfolioId).toBe("all");
     expect(res.body.baseCurrency).toBe("KRW");
     expect(res.body.totalAssetValue).toBe(2000);
+    const summaries = res.body.portfolios as Array<{
+      portfolioId: string;
+      name: string;
+      nativeBaseCurrency: string;
+      totalAssetValue: number;
+      weight: number;
+      dataStatus: string;
+    }>;
+    expect(summaries).toHaveLength(2);
+    const summaryByPortfolio = new Map(
+      summaries.map((summary) => [summary.portfolioId, summary] as const),
+    );
+    expect(summaryByPortfolio.get(first.portfolioId)).toMatchObject({
+      name: "First",
+      nativeBaseCurrency: "KRW",
+      totalAssetValue: 1000,
+      weight: 50,
+      dataStatus: "NORMAL",
+    });
+    expect(summaryByPortfolio.get(second.portfolioId)).toMatchObject({
+      name: "Second",
+      nativeBaseCurrency: "USD",
+      totalAssetValue: 1000,
+      weight: 50,
+      dataStatus: "NORMAL",
+    });
+    expect(summaryByPortfolio.has(hidden.portfolioId)).toBe(false);
     expect(res.body.topHoldings).toHaveLength(2);
     expect(
       res.body.topHoldings.find(
@@ -1077,6 +1148,27 @@ describe("8.2 dashboard", () => {
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].totalAssetValue).toBe(2000);
     expect(res.body.items[0].dataStatus).toBe("NORMAL");
+
+    const series = res.body.series as Array<{
+      portfolioId: string;
+      name: string;
+      items: Array<{ totalAssetValue: number | null; dataStatus: string }>;
+    }>;
+    expect(series).toHaveLength(2);
+    const seriesByPortfolio = new Map(
+      series.map((item) => [item.portfolioId, item] as const),
+    );
+    expect(seriesByPortfolio.get(first.portfolioId)?.name).toBe("First");
+    expect(seriesByPortfolio.get(first.portfolioId)?.items[0]).toMatchObject({
+      totalAssetValue: 1000,
+      dataStatus: "NORMAL",
+    });
+    expect(seriesByPortfolio.get(second.portfolioId)?.name).toBe("Second");
+    expect(seriesByPortfolio.get(second.portfolioId)?.items[0]).toMatchObject({
+      totalAssetValue: 1000,
+      dataStatus: "NORMAL",
+    });
+    expect(seriesByPortfolio.has(hidden.portfolioId)).toBe(false);
   });
 
   it("serves dashboard history for a single portfolio", async () => {

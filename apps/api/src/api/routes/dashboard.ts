@@ -38,10 +38,9 @@ export function createDashboardRouter(container: Container): Router {
 
       if (query.portfolioId === ALL_PORTFOLIOS_ID) {
         const portfolios = await visiblePortfolios(container);
-        const dashboard = await container.dashboard.getDashboardForAll(
-          portfolios.map((portfolio) => portfolio.portfolioId),
-          { baseCurrency: baseCurrencyFor(portfolios, query.baseCurrency) },
-        );
+        const dashboard = await container.dashboard.getDashboardForAll(portfolios, {
+          baseCurrency: baseCurrencyFor(portfolios, query.baseCurrency),
+        });
         res.json(dashboard);
         return;
       }
@@ -70,21 +69,19 @@ export function createDashboardRouter(container: Container): Router {
 
       if (!portfolioId || portfolioId === ALL_PORTFOLIOS_ID) {
         const portfolios = await visiblePortfolios(container);
-        const points = await container.dashboard.getHistoryForAll(
-          portfolios.map((portfolio) => portfolio.portfolioId),
-          {
-            baseCurrency: baseCurrencyFor(portfolios, query.baseCurrency),
-            from,
-            to,
-            interval: query.interval,
-          },
-        );
+        const history = await container.dashboard.getHistoryForAll(portfolios, {
+          baseCurrency: baseCurrencyFor(portfolios, query.baseCurrency),
+          from,
+          to,
+          interval: query.interval,
+        });
         res.json({
           portfolioId: ALL_PORTFOLIOS_ID,
           interval: query.interval,
           from,
           to,
-          items: points,
+          items: history.items,
+          series: history.series,
         });
         return;
       }

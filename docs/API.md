@@ -112,7 +112,8 @@ x-api-key: <token>
 
 `portfolioId` 가 없으면 사용자의 기본 포트폴리오를 사용하며, 없으면 생성합니다.
 `portfolioId=all` 이면 숨김 포트폴리오를 제외한 모든 포트폴리오를 기본
-포트폴리오의 기준 통화로 합산합니다.
+포트폴리오의 기준 통화로 합산하고, `portfolios` 에 포트폴리오별 내역을 함께
+반환합니다.
 
 Query:
 
@@ -147,13 +148,46 @@ Query:
 > `dailyChange` / `dailyChangeRate` 는 현재 또는 24시간 전 기준 평가금액이
 > `UNAVAILABLE` 이면 `null` 입니다 (0으로 표시하지 않음, UI-006).
 > `topHoldings[].dailyChangeRate` 는 최신가와 직전 일봉 종가의 등락률(%p)이며,
-> 직전 종가가 없으면 `null` 입니다.
+> 직전 종가가 없으면 `null` 입니다. `topHoldings` 는 현금을 제외한 모든 보유
+> 종목을 평가금액 내림차순으로 반환합니다.
+
+`portfolioId=all` 응답에는 다음 형태의 `portfolios` 배열이 추가됩니다. 금액
+필드는 모두 집계 기준 통화(`baseCurrency`)로 환산된 값이고, `weight` 는 집계
+평가금액에서 차지하는 비중(%p)입니다. `nativeBaseCurrency` 는 해당
+포트폴리오에 설정된 기준 통화입니다.
+
+```json
+{
+  "portfolioId": "all",
+  "portfolios": [
+    {
+      "portfolioId": "pf_...",
+      "name": "연금",
+      "nativeBaseCurrency": "KRW",
+      "totalAssetValue": 50000000,
+      "dailyChange": 120000,
+      "dailyChangeRate": 0.24,
+      "totalCostBasis": 40000000,
+      "unrealizedPnL": 10000000,
+      "unrealizedReturn": 25,
+      "weight": 62.5,
+      "dataStatus": "NORMAL",
+      "unavailableCount": 0
+    }
+  ]
+}
+```
 
 ### `GET /api/v1/dashboard/history`
 
 대시보드 차트용 평가금액 시계열입니다. `portfolioId=all` 이거나 생략하면 숨김
 포트폴리오를 제외한 전체 포트폴리오를 하나의 기준 통화로 합산합니다. 한
 포트폴리오라도 해당 시점 평가가 불가하면 그 시점 값은 `null` 입니다.
+
+`portfolioId=all` 응답에는 포트폴리오별 시계열인 `series` 가 추가됩니다.
+각 항목은 `{ portfolioId, name, items }` 이며, `items` 는 집계 응답의 `items`
+와 같은 `{ asOf, totalAssetValue, dataStatus }` 포인트 배열입니다. 숨김
+포트폴리오는 포함되지 않습니다.
 
 Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
 (`hourly | daily`, 기본 `daily`).

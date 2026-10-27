@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
+import { AllDashboardSections } from "@/components/AllDashboardSections";
 import { AllocationList } from "@/components/AllocationList";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
@@ -53,6 +54,7 @@ export default async function DashboardPage({
   }
   const dashboard = dashboardResult.data;
   const currency = dashboard.baseCurrency;
+  const portfolioSummaries = dashboard.portfolios ?? [];
   const range = periodRange(period);
   // Keep an actual selection (explicit URL or cookie) in period links. A page
   // that merely fell back to the API default should not turn that default into
@@ -71,6 +73,7 @@ export default async function DashboardPage({
     }),
   );
   const points = historyResult.data?.items ?? [];
+  const historySeries = historyResult.data?.series ?? [];
 
   const portfolioOptions: Option[] = (portfoliosResult.data?.items ?? []).map((p) => ({
     value: p.portfolioId,
@@ -93,13 +96,19 @@ export default async function DashboardPage({
           ) : undefined
         }
         actions={<StatusBadge status={dashboard.dataStatus} />}
-        title="전체 자산 대시보드"
-        subtitle={`기준 통화 ${currency} · 기준 시각 ${formatDateTime(dashboard.asOf)}`}
+        title={selection.isAll ? "종합 대시보드" : "전체 자산 대시보드"}
+        subtitle={
+          selection.isAll
+            ? `종합 대시보드 · 모든 포트폴리오 통합 · 기준 통화 ${currency} · 기준 시각 ${formatDateTime(dashboard.asOf)}`
+            : `기준 통화 ${currency} · 기준 시각 ${formatDateTime(dashboard.asOf)}`
+        }
       />
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>
         <div className="card">
-          <div className="metric-label">전체 자산 평가금액</div>
+          <div className="metric-label">
+            {selection.isAll ? "종합 평가금액" : "전체 자산 평가금액"}
+          </div>
           <div className="metric-value">{formatCurrency(dashboard.totalAssetValue, currency)}</div>
           <div className={`metric-delta ${changeClass(dashboard.dailyChange)}`}>
             {formatSignedCurrency(dashboard.dailyChange, currency)}{" "}
@@ -109,6 +118,11 @@ export default async function DashboardPage({
               <span>({formatPercent(dashboard.dailyChangeRate)})</span>
             )}
           </div>
+          {selection.isAll ? (
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              {portfolioSummaries.length}개 포트폴리오 합산
+            </div>
+          ) : null}
         </div>
         <div className="card">
           <div className="metric-label">총 매입 원가</div>
@@ -138,28 +152,39 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="toolbar">
-          <h2 style={{ margin: 0 }}>자산 평가금액 추이</h2>
-          <div className="pill-row" style={{ marginLeft: "auto" }}>
-            {PERIODS.map((option) => (
-              <Link
-                key={option}
-                href={`/?period=${option}${portfolioQuery}`}
-                className={`pill ${option === period ? "active" : ""}`}
-              >
-                {option}
-              </Link>
-            ))}
+      {selection.isAll ? (
+        <AllDashboardSections
+          summaries={portfolioSummaries}
+          series={historySeries}
+          currency={currency}
+          period={period}
+          portfolioQuery={portfolioQuery}
+          interval={range.interval}
+        />
+      ) : (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="toolbar">
+            <h2 style={{ margin: 0 }}>자산 평가금액 추이</h2>
+            <div className="pill-row" style={{ marginLeft: "auto" }}>
+              {PERIODS.map((option) => (
+                <Link
+                  key={option}
+                  href={`/?period=${option}${portfolioQuery}`}
+                  className={`pill ${option === period ? "active" : ""}`}
+                >
+                  {option}
+                </Link>
+              ))}
+            </div>
           </div>
+          <LineChart points={points} currency={currency} interval={range.interval} />
+          {points.some((p) => p.totalAssetValue === null) ? (
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
+            </div>
+          ) : null}
         </div>
-        <LineChart points={points} currency={currency} interval={range.interval} />
-        {points.some((p) => p.totalAssetValue === null) ? (
-          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
-          </div>
-        ) : null}
-      </div>
+      )}
 
       <div className="grid cols-2" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -174,7 +199,7 @@ export default async function DashboardPage({
 
       <div className="grid cols-2">
         <div className="card">
-          <h2>주요 보유 종목</h2>
+          <h2>보유 종목</h2>
           {dashboard.topHoldings.length === 0 ? (
             <div className="empty">보유 종목이 없습니다.</div>
           ) : (

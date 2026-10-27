@@ -7,6 +7,7 @@ import type {
   ListResponse,
   MarketQuote,
   Portfolio,
+  PortfolioHistorySeries,
   PortfolioSnapshot,
   ProviderStatusView,
   SignalEvent,
@@ -148,6 +149,8 @@ export const api = {
       from: string;
       to: string;
       items: HistoryPoint[];
+      /** Present for the aggregate `all` response. */
+      series?: PortfolioHistorySeries[];
     }>(`/dashboard/history${query(params)}`),
 
   portfolios: (params: { includeHidden?: boolean } = {}) =>

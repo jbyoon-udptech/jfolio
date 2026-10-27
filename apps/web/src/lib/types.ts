@@ -147,6 +147,23 @@ export interface SignalRule {
   updatedAt: string;
 }
 
+export interface PortfolioDashboardSummary {
+  portfolioId: string;
+  name: string;
+  /** The portfolio's configured base currency, not the aggregate display currency. */
+  nativeBaseCurrency: string;
+  totalAssetValue: number | null;
+  dailyChange: number | null;
+  dailyChangeRate: number | null;
+  totalCostBasis: number | null;
+  unrealizedPnL: number | null;
+  unrealizedReturn: number | null;
+  /** Share of the aggregate valuation, in percentage points. */
+  weight: number | null;
+  dataStatus: DataStatus;
+  unavailableCount: number;
+}
+
 export interface Dashboard {
   portfolioId: string;
   baseCurrency: string;
@@ -164,12 +181,20 @@ export interface Dashboard {
   topHoldings: ValuedPosition[];
   recentSignals: SignalEvent[];
   lastDataUpdatedAt: string | null;
+  /** Per-portfolio breakdown; present for the aggregate `all` dashboard. */
+  portfolios?: PortfolioDashboardSummary[];
 }
 
 export interface HistoryPoint {
   asOf: string;
   totalAssetValue: number | null;
   dataStatus: DataStatus;
+}
+
+export interface PortfolioHistorySeries {
+  portfolioId: string;
+  name: string;
+  items: HistoryPoint[];
 }
 
 export interface PortfolioSnapshot {

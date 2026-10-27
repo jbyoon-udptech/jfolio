@@ -1,6 +1,7 @@
 import {
   ALL_PORTFOLIOS_ID,
   type DataStatus,
+  type Portfolio,
   type SignalEvent,
   type ValuedPosition,
 } from "@jfolio/shared";
@@ -14,6 +15,23 @@ export interface AllocationSlice {
   key: string;
   marketValueBase: number;
   weight: number;
+}
+
+export interface PortfolioDashboardSummary {
+  portfolioId: string;
+  name: string;
+  /** The portfolio's configured base currency, not the aggregate display currency. */
+  nativeBaseCurrency: string;
+  totalAssetValue: number | null;
+  dailyChange: number | null;
+  dailyChangeRate: number | null;
+  totalCostBasis: number | null;
+  unrealizedPnL: number | null;
+  unrealizedReturn: number | null;
+  /** Share of the aggregate valuation, in percentage points. */
+  weight: number | null;
+  dataStatus: DataStatus;
+  unavailableCount: number;
 }
 
 export interface DashboardResult {
@@ -33,12 +51,26 @@ export interface DashboardResult {
   topHoldings: ValuedPosition[];
   recentSignals: SignalEvent[];
   lastDataUpdatedAt: Date | null;
+  /** Per-portfolio breakdown; present for the aggregate `all` dashboard. */
+  portfolios?: PortfolioDashboardSummary[];
 }
 
 export interface DashboardHistoryPoint {
   asOf: Date;
   totalAssetValue: number | null;
   dataStatus: DataStatus;
+}
+
+export interface DashboardHistorySeries {
+  portfolioId: string;
+  name: string;
+  items: DashboardHistoryPoint[];
+}
+
+export interface DashboardHistoryResult {
+  /** Aggregate series. A point is null when any portfolio is unavailable. */
+  items: DashboardHistoryPoint[];
+  series: DashboardHistorySeries[];
 }
 
 /**
@@ -73,43 +105,73 @@ export class DashboardService {
    * portfolios are resolved by the route and therefore never contribute here.
    */
   async getDashboardForAll(
-    portfolioIds: string[],
+    portfolios: Portfolio[],
     options: { baseCurrency: string },
   ): Promise<DashboardResult> {
     const now = this.now();
-    const current = await this.aggregateValuations(portfolioIds, {
-      baseCurrency: options.baseCurrency,
-      asOf: now,
-    });
-    const previous = await this.aggregateValuations(portfolioIds, {
-      baseCurrency: options.baseCurrency,
-      asOf: new Date(now.getTime() - DAY_MS),
-    });
-    return this.toDashboard(ALL_PORTFOLIOS_ID, current, previous);
+    const current = await this.aggregateValuations(
+      portfolios.map((portfolio) => portfolio.portfolioId),
+      {
+        baseCurrency: options.baseCurrency,
+        asOf: now,
+      },
+    );
+    const previous = await this.aggregateValuations(
+      portfolios.map((portfolio) => portfolio.portfolioId),
+      {
+        baseCurrency: options.baseCurrency,
+        asOf: new Date(now.getTime() - DAY_MS),
+      },
+    );
+    const dashboard = await this.toDashboard(
+      ALL_PORTFOLIOS_ID,
+      current.aggregate,
+      previous.aggregate,
+    );
+
+    return {
+      ...dashboard,
+      portfolios: portfolios.flatMap((portfolio, index) => {
+        const result = current.results[index];
+        const previousResult = previous.results[index];
+        if (!result || !previousResult) return [];
+        return [
+          buildPortfolioSummary(
+            portfolio,
+            result,
+            previousResult,
+            current.aggregate.totalAssetValue,
+          ),
+        ];
+      }),
+    };
   }
 
   /**
    * FR-053: aggregate history for the `All` dashboard. A point is unavailable
    * when any portfolio is unavailable at that time, so the total is never
-   * understated by a partial series.
+   * understated by a partial series. The per-portfolio series are returned
+   * alongside the aggregate so the UI can draw one line per portfolio.
    */
   async getHistoryForAll(
-    portfolioIds: string[],
+    portfolios: Portfolio[],
     options: {
       baseCurrency: string;
       from: Date;
       to: Date;
       interval?: "hourly" | "daily";
     },
-  ): Promise<DashboardHistoryPoint[]> {
-    if (portfolioIds.length === 0) return [];
+  ): Promise<DashboardHistoryResult> {
+    if (portfolios.length === 0) return { items: [], series: [] };
     const series = await Promise.all(
-      portfolioIds.map((portfolioId) => this.valuation.historySeries(portfolioId, options)),
+      portfolios.map((portfolio) =>
+        this.valuation.historySeries(portfolio.portfolioId, options),
+      ),
     );
     const first = series[0];
-    if (!first) return [];
+    if (!first) return { items: [], series: [] };
 
-    return first.map((point, index) => {
+    const items = first.map((point, index) => {
       const points = series.map((items) => items[index]);
       const values = points.map((item) => item?.totalAssetValue);
       const complete = values.every(
@@ -123,26 +185,38 @@ export class DashboardService {
         ),
       };
     });
+
+    return {
+      items,
+      series: portfolios.map((portfolio, index) => ({
+        portfolioId: portfolio.portfolioId,
+        name: portfolio.name,
+        items: series[index] ?? [],
+      })),
+    };
   }
 
   private async aggregateValuations(
     portfolioIds: string[],
     options: { baseCurrency: string; asOf: Date },
-  ): Promise<ValuationResult> {
+  ): Promise<{ aggregate: ValuationResult; results: ValuationResult[] }> {
     if (portfolioIds.length === 0) {
       return {
-        portfolioId: ALL_PORTFOLIOS_ID,
-        baseCurrency: options.baseCurrency,
-        asOf: options.asOf,
-        dataStatus: "NO_DATA",
-        totalAssetValue: 0,
-        totalCostBasis: 0,
-        unrealizedPnL: 0,
-        unrealizedReturn: null,
-        positions: [],
-        cashBalances: [],
-        unavailableCount: 0,
-        warnings: [],
+        aggregate: {
+          portfolioId: ALL_PORTFOLIOS_ID,
+          baseCurrency: options.baseCurrency,
+          asOf: options.asOf,
+          dataStatus: "NO_DATA",
+          totalAssetValue: 0,
+          totalCostBasis: 0,
+          unrealizedPnL: 0,
+          unrealizedReturn: null,
+          positions: [],
+          cashBalances: [],
+          unavailableCount: 0,
+          warnings: [],
+        },
+        results: [],
       };
     }
 
@@ -173,21 +247,24 @@ export class DashboardService {
           );
 
     return {
-      portfolioId: ALL_PORTFOLIOS_ID,
-      baseCurrency: results[0]?.baseCurrency ?? options.baseCurrency,
-      asOf: options.asOf,
-      dataStatus: mergeDataStatus(results.map((result) => result.dataStatus)),
-      totalAssetValue,
-      totalCostBasis,
-      unrealizedPnL,
-      unrealizedReturn,
-      positions: results.flatMap((result) => result.positions),
-      cashBalances: results.flatMap((result) => result.cashBalances),
-      unavailableCount: results.reduce(
-        (total, result) => total + result.unavailableCount,
-        0,
-      ),
-      warnings: results.flatMap((result) => result.warnings),
+      aggregate: {
+        portfolioId: ALL_PORTFOLIOS_ID,
+        baseCurrency: results[0]?.baseCurrency ?? options.baseCurrency,
+        asOf: options.asOf,
+        dataStatus: mergeDataStatus(results.map((result) => result.dataStatus)),
+        totalAssetValue,
+        totalCostBasis,
+        unrealizedPnL,
+        unrealizedReturn,
+        positions: results.flatMap((result) => result.positions),
+        cashBalances: results.flatMap((result) => result.cashBalances),
+        unavailableCount: results.reduce(
+          (total, result) => total + result.unavailableCount,
+          0,
+        ),
+        warnings: results.flatMap((result) => result.warnings),
+      },
+      results,
     };
   }
 
@@ -199,10 +276,11 @@ export class DashboardService {
     const allocationByAssetType = buildAllocation(current.positions, (p) => p.assetType);
     const allocationByCurrency = buildAllocation(current.positions, (p) => p.currency);
 
+    // `topHoldings` is kept as the API field name for compatibility, but the
+    // dashboard now shows every non-cash holding rather than only the top ten.
     const topHoldings = mergeAvailablePositions(current.positions)
       .filter((p) => p.assetType !== "CASH")
-      .sort((a, b) => (b.marketValueBase ?? 0) - (a.marketValueBase ?? 0))
-      .slice(0, 10);
+      .sort((a, b) => (b.marketValueBase ?? 0) - (a.marketValueBase ?? 0));
 
     const events = await this.repos.signalEvents.list({ limit: 5 });
     const lastDataUpdatedAt = current.positions.reduce<Date | null>((latest, p) => {
@@ -246,6 +324,53 @@ export class DashboardService {
       lastDataUpdatedAt,
     };
   }
+}
+
+function buildPortfolioSummary(
+  portfolio: Portfolio,
+  current: ValuationResult,
+  previous: ValuationResult,
+  aggregateTotal: number | null,
+): PortfolioDashboardSummary {
+  // Match the aggregate dashboard rule: never derive a change from an
+  // unavailable baseline. The change is unknown, not zero.
+  const dailyChange =
+    current.dataStatus === "UNAVAILABLE" ||
+    previous.dataStatus === "UNAVAILABLE" ||
+    current.totalAssetValue === null ||
+    previous.totalAssetValue === null
+      ? null
+      : subtract(current.totalAssetValue, previous.totalAssetValue);
+  const dailyChangeRate =
+    dailyChange === null ||
+    previous.totalAssetValue === null ||
+    previous.totalAssetValue === 0
+      ? null
+      : multiply(divide(dailyChange, previous.totalAssetValue) as number, 100);
+  const weight =
+    aggregateTotal === null ||
+    aggregateTotal === 0 ||
+    current.totalAssetValue === null
+      ? null
+      : round(
+          multiply(divide(current.totalAssetValue, aggregateTotal) as number, 100),
+          4,
+        );
+
+  return {
+    portfolioId: portfolio.portfolioId,
+    name: portfolio.name,
+    nativeBaseCurrency: portfolio.baseCurrency,
+    totalAssetValue: current.totalAssetValue,
+    dailyChange,
+    dailyChangeRate,
+    totalCostBasis: current.totalCostBasis,
+    unrealizedPnL: current.unrealizedPnL,
+    unrealizedReturn: current.unrealizedReturn,
+    weight,
+    dataStatus: current.dataStatus,
+    unavailableCount: current.unavailableCount,
+  };
 }
 
 function mergeDataStatus(statuses: DataStatus[]): DataStatus {
