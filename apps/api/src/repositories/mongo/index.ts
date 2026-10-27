@@ -18,6 +18,7 @@ import type { User, UserIdentity } from "../../users/user.types";
 import type { UserRepository } from "../../users/user.repository";
 import type {
   CollectionJobRepository,
+  FxRateQuery,
   FxRateRepository,
   HistoricalQuery,
   InstrumentFilter,
@@ -290,6 +291,21 @@ class MongoFxRateRepository implements FxRateRepository {
       .limit(1)
       .next();
     return doc ? stripId<FxRate>(doc) : null;
+  }
+
+  async getRates(base: string, quote: string, query: FxRateQuery = {}): Promise<FxRate[]> {
+    const filter: Filter<FxRate> = { base, quote };
+    if (query.from || query.to) {
+      filter.timestamp = {};
+      if (query.from) filter.timestamp.$gte = query.from;
+      if (query.to) filter.timestamp.$lte = query.to;
+    }
+    const docs = await this.col
+      .find(filter, NO_ID)
+      .sort({ timestamp: -1 })
+      .limit(query.limit ?? 5000)
+      .toArray();
+    return docs.map((d) => stripId<FxRate>(d));
   }
 
   async getLatest(base: string, quote: string): Promise<FxRate | null> {

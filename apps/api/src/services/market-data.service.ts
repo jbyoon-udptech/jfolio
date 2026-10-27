@@ -2,6 +2,8 @@ import type { Instrument, LatestQuote, MarketQuote } from "@jfolio/shared";
 import { parseFxPair } from "../providers/market-data.provider";
 import type { HistoricalQuery, Repositories } from "../repositories/types";
 import { isFiniteNumber, isPositiveFinite } from "../domain/money";
+import { RepositoryFxRateSource, resolveFxRate } from "./fx-resolver";
+import type { LookupCache } from "./lookup-cache";
 
 export interface QuoteIssue {
   code: string;
@@ -37,12 +39,24 @@ const DEFAULT_STABLECOIN_PEGS: ReadonlySet<string> = new Set([
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Cache key for a point-in-time quote lookup. */
+export function quoteAsOfKey(instrumentId: string, asOf: Date): string {
+  return `quote-as-of|${instrumentId}|${asOf.getTime()}`;
+}
+
+/** Cache key for a point-in-time FX rate lookup. */
+export function fxRateKey(from: string, to: string, asOf: Date): string {
+  return `fx|${from}|${to}|${asOf.getTime()}`;
+}
+
 /**
  * FR-013 / FR-020 / FR-021: Validate and persist normalised market quotes.
  * Invalid data is never silently turned into a valuation — it is rejected and
  * recorded. Suspicious-but-plausible data is stored and flagged.
  */
 export class MarketDataService {
+  private readonly fxSource: RepositoryFxRateSource;
+
   constructor(
     private readonly repos: Repositories,
     private readonly now: () => Date = () => new Date(),
@@ -51,8 +65,10 @@ export class MarketDataService {
      * such as USDT are not fiat and no FX provider publishes them, so a
      * USDT-priced asset is converted via USD (USDT -> USD -> KRW).
      */
-    private readonly stablecoinPegs: ReadonlySet<string> = DEFAULT_STABLECOIN_PEGS,
-  ) {}
+    readonly stablecoinPegs: ReadonlySet<string> = DEFAULT_STABLECOIN_PEGS,
+  ) {
+    this.fxSource = new RepositoryFxRateSource(repos);
+  }
 
   validateQuote(instrument: Instrument, quote: MarketQuote): QuoteIssue[] {
     const issues: QuoteIssue[] = [];
@@ -151,12 +167,38 @@ export class MarketDataService {
   }
 
   /**
+   * Whether `asOf` is close enough to now that the latest quote should be
+   * preferred over a historical daily close. Shared with history prefetch so
+   * both paths make the same choice.
+   */
+  isCurrent(asOf: Date): boolean {
+    return asOf.getTime() >= this.now().getTime() - 60_000;
+  }
+
+  /**
    * FR-053: Price as of a specific time. For "now-ish" times this uses the
    * latest quote; for historical times it prefers a daily close then any quote
    * at or before the requested instant.
+   *
+   * `cache` is optional request-scoped memoisation; callers that value many
+   * points (history series) pass one so repeated lookups collapse.
    */
-  async getQuoteAsOf(instrumentId: string, asOf: Date): Promise<MarketQuote | null> {
-    if (asOf.getTime() >= this.now().getTime() - 60_000) {
+  async getQuoteAsOf(
+    instrumentId: string,
+    asOf: Date,
+    cache?: LookupCache,
+  ): Promise<MarketQuote | null> {
+    if (!cache) return this.loadQuoteAsOf(instrumentId, asOf);
+    return cache.get(quoteAsOfKey(instrumentId, asOf), () =>
+      this.loadQuoteAsOf(instrumentId, asOf),
+    );
+  }
+
+  private async loadQuoteAsOf(
+    instrumentId: string,
+    asOf: Date,
+  ): Promise<MarketQuote | null> {
+    if (this.isCurrent(asOf)) {
       const latest = await this.repos.quotes.getLatest(instrumentId);
       if (latest) return latest;
     }
@@ -194,48 +236,19 @@ export class MarketDataService {
 
   /**
    * FR-042: Resolve an FX rate from `from` to `to` as of `asOf`, trying the
-   * direct pair then the inverse.
+   * direct pair, the inverse, then the stablecoin bridge. `cache` follows the
+   * same request-scoped semantics as {@link getQuoteAsOf}.
    */
-  async getFxRate(from: string, to: string, asOf: Date): Promise<number | null> {
-    if (from === to) return 1;
-    const direct = await this.repos.fxRates.getRate(from, to, asOf);
-    if (direct && isPositiveFinite(direct.rate)) return direct.rate;
-    const inverse = await this.repos.fxRates.getRate(to, from, asOf);
-    if (inverse && isPositiveFinite(inverse.rate)) return 1 / inverse.rate;
-    return this.resolveViaStablecoinPeg(from, to, asOf);
-  }
-
-  /**
-   * Documented assumption: stablecoins (USDT, USDC, ...) are treated as pegged
-   * 1:1 to USD because no fiat FX provider publishes them. This lets a
-   * USDT-priced crypto asset be converted to the base currency through the
-   * existing USD rate without inventing a synthetic price.
-   */
-  private async resolveViaStablecoinPeg(
+  async getFxRate(
     from: string,
     to: string,
     asOf: Date,
+    cache?: LookupCache,
   ): Promise<number | null> {
-    const pegs = this.stablecoinPegs;
-    const fromPegged = pegs.has(from);
-    const toPegged = pegs.has(to);
-    if (!fromPegged && !toPegged) return null;
-    if (fromPegged && toPegged) return 1;
-    if (fromPegged) {
-      if (to === "USD") return 1;
-      return this.lookupFiat("USD", to, asOf);
-    }
-    // toPegged
-    if (from === "USD") return 1;
-    return this.lookupFiat(from, "USD", asOf);
-  }
-
-  /** Direct-or-inverse lookup against stored fiat rates. */
-  private async lookupFiat(base: string, quote: string, asOf: Date): Promise<number | null> {
-    const direct = await this.repos.fxRates.getRate(base, quote, asOf);
-    if (direct && isPositiveFinite(direct.rate)) return direct.rate;
-    const inverse = await this.repos.fxRates.getRate(quote, base, asOf);
-    if (inverse && isPositiveFinite(inverse.rate)) return 1 / inverse.rate;
-    return null;
+    if (from === to) return 1;
+    if (!cache) return resolveFxRate(this.fxSource, from, to, asOf, this.stablecoinPegs);
+    return cache.get(fxRateKey(from, to, asOf), () =>
+      resolveFxRate(this.fxSource, from, to, asOf, this.stablecoinPegs),
+    );
   }
 }

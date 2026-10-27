@@ -17,6 +17,7 @@ import type { User, UserIdentity } from "../../users/user.types";
 import type { UserRepository } from "../../users/user.repository";
 import type {
   CollectionJobRepository,
+  FxRateQuery,
   FxRateRepository,
   HistoricalQuery,
   InstrumentFilter,
@@ -205,6 +206,16 @@ export class MemoryFxRateRepository implements FxRateRepository {
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     const found = items[0];
     return found ? clone(found) : null;
+  }
+
+  async getRates(base: string, quote: string, query: FxRateQuery = {}): Promise<FxRate[]> {
+    const from = query.from;
+    const to = query.to;
+    let items = this.rates.filter((r) => r.base === base && r.quote === quote);
+    if (from) items = items.filter((r) => r.timestamp >= from);
+    if (to) items = items.filter((r) => r.timestamp <= to);
+    items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return items.slice(0, query.limit ?? 5000).map(clone);
   }
 
   async getLatest(base: string, quote: string): Promise<FxRate | null> {

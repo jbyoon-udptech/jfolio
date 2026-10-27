@@ -6,8 +6,10 @@ import type {
 } from "@jfolio/shared";
 import { divide, isPositiveFinite, multiply, round, subtract } from "../domain/money";
 import type { Repositories } from "../repositories/types";
+import { prefetchHistoryLookups } from "./history-prefetch";
+import { LookupCache } from "./lookup-cache";
 import { MarketDataService } from "./market-data.service";
-import { PositionService } from "./position.service";
+import { PositionService, ledgerCacheKey } from "./position.service";
 
 export interface ValuationResult {
   portfolioId: string;
@@ -29,8 +31,26 @@ export interface ValuationOptions {
   asOf?: Date;
 }
 
+/**
+ * Request-scoped inputs shared by every point of a history series. A single
+ * valuation simply omits the context.
+ */
+export interface ValuationContext {
+  cache?: LookupCache;
+  /**
+   * Instrument metadata preloaded for the whole ledger. Passing it avoids a
+   * lookup per distinct holdings set inside a long history series.
+   */
+  instruments?: ReadonlyMap<string, Instrument>;
+}
+
 /** Staleness threshold for intraday data (NFR / UI-006). */
 const STALE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Number of history points valued concurrently. Bounded so a long series does
+ * not exhaust the Mongo connection pool while still hiding per-point latency.
+ */
+const HISTORY_CONCURRENCY = 12;
 
 /**
  * FR-041 / FR-042 / FR-043 / FR-044 / FR-045 / FR-053: Computes market value,
@@ -52,22 +72,39 @@ export class ValuationService {
     this.positions = new PositionService(repos);
   }
 
-  async valuate(portfolioId: string, options: ValuationOptions = {}): Promise<ValuationResult> {
-    const portfolio = await this.repos.portfolios.findById(portfolioId);
-    const baseCurrency = options.baseCurrency ?? portfolio?.baseCurrency ?? "KRW";
+  async valuate(
+    portfolioId: string,
+    options: ValuationOptions = {},
+    context: ValuationContext = {},
+  ): Promise<ValuationResult> {
+    // Resolve the portfolio only when the caller does not already know the base
+    // currency. A history series fixes it once for every point.
+    const baseCurrency =
+      options.baseCurrency ??
+      (await this.repos.portfolios.findById(portfolioId))?.baseCurrency ??
+      "KRW";
     const now = this.now();
     const asOf = options.asOf ?? now;
     // Per-holding change rates describe "today", so they are only resolved for
     // current valuations. Historical series only consume the totals.
-    const isCurrent = asOf.getTime() >= now.getTime() - 60_000;
+    const isCurrent = this.marketData.isCurrent(asOf);
 
-    const { positions, warnings } = await this.positions.calculate(portfolioId, asOf);
-    const instruments = await this.repos.instruments.findMany(
-      positions.map((p) => p.instrumentId),
-    );
-    const instrumentMap = new Map<string, Instrument>(
-      instruments.map((i) => [i.instrumentId, i]),
-    );
+    const cache = context.cache;
+    const { positions, warnings } = await this.positions.calculate(portfolioId, asOf, cache);
+    const instrumentIds = positions.map((p) => p.instrumentId);
+    let instrumentMap: ReadonlyMap<string, Instrument>;
+    if (context.instruments) {
+      instrumentMap = context.instruments;
+    } else {
+      const instruments = cache
+        ? await cache.get(`instruments|${[...instrumentIds].sort().join(",")}`, () =>
+            this.repos.instruments.findMany(instrumentIds),
+          )
+        : await this.repos.instruments.findMany(instrumentIds);
+      instrumentMap = new Map<string, Instrument>(
+        instruments.map((i) => [i.instrumentId, i]),
+      );
+    }
 
     const valued: ValuedPosition[] = [];
     const cashBalances: CashBalance[] = [];
@@ -114,7 +151,7 @@ export class ValuationService {
         price = 1;
         priceTimestamp = asOf;
       } else {
-        const quote = await this.marketData.getQuoteAsOf(instrument.instrumentId, asOf);
+        const quote = await this.marketData.getQuoteAsOf(instrument.instrumentId, asOf, cache);
         if (quote) {
           price = quote.price;
           priceCurrency = quote.currency || instrument.currency;
@@ -137,7 +174,12 @@ export class ValuationService {
             )
           : null;
 
-      const fxRateToBase = await this.marketData.getFxRate(priceCurrency, baseCurrency, asOf);
+      const fxRateToBase = await this.marketData.getFxRate(
+        priceCurrency,
+        baseCurrency,
+        asOf,
+        cache,
+      );
       if (fxRateToBase === null) {
         valued.push({
           ...base,
@@ -151,7 +193,12 @@ export class ValuationService {
         continue;
       }
 
-      const costFx = await this.marketData.getFxRate(position.costCurrency, baseCurrency, asOf);
+      const costFx = await this.marketData.getFxRate(
+        position.costCurrency,
+        baseCurrency,
+        asOf,
+        cache,
+      );
       const marketValue = multiply(position.quantity, price);
       const marketValueBase = multiply(marketValue, fxRateToBase);
       const costBasisBase = costFx === null ? null : multiply(position.costBasis, costFx);
@@ -264,22 +311,77 @@ export class ValuationService {
   ): Promise<Array<{ asOf: Date; totalAssetValue: number | null; dataStatus: DataStatus }>> {
     const interval = options.interval ?? "daily";
     const stepMs = interval === "hourly" ? 3_600_000 : 86_400_000;
-    const points: Array<{ asOf: Date; totalAssetValue: number | null; dataStatus: DataStatus }> = [];
+    // The portfolio (and therefore its base currency) is fixed for the whole
+    // series; resolving it once removes a lookup per point.
+    const baseCurrency =
+      options.baseCurrency ??
+      (await this.repos.portfolios.findById(portfolioId))?.baseCurrency ??
+      "KRW";
+    const cache = new LookupCache();
+
+    const cursors: Date[] = [];
     let cursor = new Date(options.from);
     let guard = 0;
     while (cursor <= options.to && guard < 2000) {
-      const valuation = await this.valuate(portfolioId, {
-        baseCurrency: options.baseCurrency,
-        asOf: cursor,
-      });
-      points.push({
-        asOf: cursor,
-        totalAssetValue:
-          valuation.dataStatus === "UNAVAILABLE" ? null : valuation.totalAssetValue,
-        dataStatus: valuation.dataStatus,
-      });
+      cursors.push(cursor);
       cursor = new Date(cursor.getTime() + stepMs);
       guard += 1;
+    }
+    if (cursors.length === 0) return [];
+
+    // Read the ledger and instrument metadata once for the whole series, then
+    // bulk-load daily quotes and FX rates over the requested window. Every
+    // point below is then valued from the request cache.
+    const ledger = await cache.get(ledgerCacheKey(portfolioId), () =>
+      this.repos.transactions.listByPortfolio(portfolioId),
+    );
+    const relevant = ledger.filter((transaction) => transaction.timestamp <= options.to);
+    const ledgerInstrumentIds = [...new Set(relevant.map((t) => t.instrumentId))];
+    const instruments =
+      ledgerInstrumentIds.length > 0
+        ? await this.repos.instruments.findMany(ledgerInstrumentIds)
+        : [];
+    const instrumentMap = new Map(
+      instruments.map((instrument) => [instrument.instrumentId, instrument]),
+    );
+
+    const currencies = new Set<string>([baseCurrency]);
+    for (const instrument of instruments) currencies.add(instrument.currency);
+    for (const transaction of relevant) currencies.add(transaction.currency);
+
+    await prefetchHistoryLookups({
+      repos: this.repos,
+      marketData: this.marketData,
+      cache,
+      instrumentIds: instruments
+        .filter((instrument) => instrument.assetType !== "CASH")
+        .map((instrument) => instrument.instrumentId),
+      currencies,
+      baseCurrency,
+      from: options.from,
+      to: options.to,
+      cursors,
+    });
+
+    const context: ValuationContext = { cache, instruments: instrumentMap };
+    const points: Array<{ asOf: Date; totalAssetValue: number | null; dataStatus: DataStatus }> = [];
+    // Bound the number of points valued at once. The lookups themselves are
+    // in-memory now; batching keeps intermediate valuation objects bounded for
+    // long hourly series.
+    for (let start = 0; start < cursors.length; start += HISTORY_CONCURRENCY) {
+      const batch = cursors.slice(start, start + HISTORY_CONCURRENCY);
+      const valuations = await Promise.all(
+        batch.map(async (asOf) => {
+          const valuation = await this.valuate(portfolioId, { baseCurrency, asOf }, context);
+          return {
+            asOf,
+            totalAssetValue:
+              valuation.dataStatus === "UNAVAILABLE" ? null : valuation.totalAssetValue,
+            dataStatus: valuation.dataStatus,
+          };
+        }),
+      );
+      points.push(...valuations);
     }
     return points;
   }

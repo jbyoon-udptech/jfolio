@@ -312,4 +312,257 @@ describe("14.3 historical data", () => {
     expect(series[2]?.totalAssetValue).toBe(1000);
     expect(series[2]?.dataStatus).toBe("NORMAL");
   });
+
+  it("H-007: historySeries resolves shared lookups once per request", async () => {
+    const { repos, container } = createTestContext();
+    const portfolio = await createPortfolio(container, "KRW");
+    const fx = await createInstrument(container, {
+      symbol: "USD/KRW",
+      name: "US Dollar / Korean Won",
+      assetType: "FX",
+      market: "FX",
+      currency: "KRW",
+      providers: [{ providerId: "test", providerSymbol: "USD" }],
+    });
+    const usd = await createInstrument(container, {
+      symbol: "AAPL",
+      name: "Apple Inc.",
+      assetType: "STOCK",
+      market: "NASDAQ",
+      currency: "USD",
+      providers: [],
+    });
+
+    const day1 = iso("2026-10-11T00:00:00.000Z");
+    const day3 = iso("2026-10-13T00:00:00.000Z");
+    const day4 = iso("2026-10-14T00:00:00.000Z");
+
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: usd.instrumentId,
+      type: "BUY",
+      timestamp: day1,
+      quantity: 1,
+      price: 100,
+      currency: "USD",
+      fee: 0,
+    });
+    await storeDaily(container, fx, 1400, day1);
+    await storeDaily(container, fx, 1300, day3);
+    await storeDaily(container, usd, 100, day1);
+    await storeDaily(container, usd, 100, day3);
+
+    // Count repository round trips made by the history request itself.
+    const calls = { portfolios: 0, ledgers: 0, instruments: 0, fxSeeds: 0, fxRanges: 0 };
+    const portfolioRepo = repos.portfolios;
+    const findPortfolio = portfolioRepo.findById.bind(portfolioRepo);
+    portfolioRepo.findById = async (id: string) => {
+      calls.portfolios += 1;
+      return findPortfolio(id);
+    };
+    const transactionRepo = repos.transactions;
+    const listByPortfolio = transactionRepo.listByPortfolio.bind(transactionRepo);
+    transactionRepo.listByPortfolio = async (portfolioId: string, to?: Date) => {
+      calls.ledgers += 1;
+      return listByPortfolio(portfolioId, to);
+    };
+    const instrumentRepo = repos.instruments;
+    const findMany = instrumentRepo.findMany.bind(instrumentRepo);
+    instrumentRepo.findMany = async (ids: string[]) => {
+      calls.instruments += 1;
+      return findMany(ids);
+    };
+    const fxRepo = repos.fxRates;
+    const getRate = fxRepo.getRate.bind(fxRepo);
+    fxRepo.getRate = async (base: string, quote: string, asOf: Date) => {
+      calls.fxSeeds += 1;
+      return getRate(base, quote, asOf);
+    };
+    const getRates = fxRepo.getRates.bind(fxRepo);
+    fxRepo.getRates = async (
+      base: string,
+      quote: string,
+      query?: Parameters<typeof getRates>[2],
+    ) => {
+      calls.fxRanges += 1;
+      return getRates(base, quote, query);
+    };
+
+    const quoteCalls = { lastBefore: 0, historical: 0 };
+    const quoteRepo = repos.quotes;
+    const getLastBefore = quoteRepo.getLastBefore.bind(quoteRepo);
+    quoteRepo.getLastBefore = async (
+      instrumentId: string,
+      before: Date,
+      interval?: Parameters<typeof getLastBefore>[2],
+    ) => {
+      quoteCalls.lastBefore += 1;
+      return getLastBefore(instrumentId, before, interval);
+    };
+    const getHistorical = quoteRepo.getHistorical.bind(quoteRepo);
+    quoteRepo.getHistorical = async (
+      instrumentId: string,
+      query?: Parameters<typeof getHistorical>[1],
+    ) => {
+      quoteCalls.historical += 1;
+      return getHistorical(instrumentId, query);
+    };
+
+    const series = await container.valuation.historySeries(portfolio.portfolioId, {
+      from: day1,
+      to: day4,
+      interval: "daily",
+    });
+
+    expect(series.map((point) => point.totalAssetValue)).toEqual([
+      140000, 140000, 130000, 130000,
+    ]);
+    expect(calls.portfolios).toBe(1);
+    expect(calls.ledgers).toBe(1);
+    expect(calls.instruments).toBe(1);
+    // Quote history is fetched once per instrument for the whole window, not
+    // once per point: one seed lookup and one range lookup.
+    expect(quoteCalls.lastBefore).toBe(1);
+    expect(quoteCalls.historical).toBe(1);
+    // FX ranges are fetched once per directed pair (USD/KRW and KRW/USD), then
+    // every point is valued from memory. The point loop issues no rate lookups.
+    expect(calls.fxSeeds).toBe(2);
+    expect(calls.fxRanges).toBe(2);
+  });
+
+  it("H-008: historySeries falls back to any-interval quotes when no daily close exists", async () => {
+    const { container } = createTestContext();
+    const portfolio = await createPortfolio(container, "KRW");
+    const instrument = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const day1 = iso("2026-10-11T00:00:00.000Z");
+    const day2 = iso("2026-10-12T00:00:00.000Z");
+    const day3 = iso("2026-10-13T00:00:00.000Z");
+
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: day1,
+      quantity: 10,
+      price: 100,
+      currency: "KRW",
+      fee: 0,
+    });
+    // Intraday observations only: the bulk daily read finds nothing, so the
+    // per-point path must still fall back to the any-interval quote.
+    for (const [price, timestamp] of [
+      [100, day1],
+      [110, day2],
+      [120, day3],
+    ] as const) {
+      await container.marketData.storeQuote(
+        instrument,
+        makeQuote(instrument, price, { timestamp, interval: "1m" }),
+      );
+    }
+
+    const series = await container.valuation.historySeries(portfolio.portfolioId, {
+      from: day1,
+      to: day3,
+      interval: "daily",
+    });
+
+    expect(series.map((point) => point.totalAssetValue)).toEqual([1000, 1100, 1200]);
+    expect(series.map((point) => point.dataStatus)).toEqual(["NORMAL", "NORMAL", "NORMAL"]);
+  });
+
+  it("H-009: historySeries uses the latest quote for a now-ish final point", async () => {
+    const { container, now } = createTestContext();
+    const portfolio = await createPortfolio(container, "KRW");
+    const instrument = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const from = new Date(now.getTime() - 2 * DAY);
+
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: from,
+      quantity: 10,
+      price: 100,
+      currency: "KRW",
+      fee: 0,
+    });
+    await storeDaily(container, instrument, 100, from);
+    // A fresher intraday observation must win for the "now" point, exactly as
+    // a single-point valuation would.
+    await container.marketData.storeQuote(
+      instrument,
+      makeQuote(instrument, 130, { timestamp: now, interval: "1m" }),
+    );
+
+    const series = await container.valuation.historySeries(portfolio.portfolioId, {
+      from,
+      to: now,
+      interval: "daily",
+    });
+
+    expect(series).toHaveLength(3);
+    expect(series.map((point) => point.totalAssetValue)).toEqual([1000, 1000, 1300]);
+  });
+
+  it("H-010: historySeries preserves the stablecoin FX bridge from a bulk range", async () => {
+    const { container } = createTestContext();
+    const portfolio = await createPortfolio(container, "KRW");
+    const fx = await createInstrument(container, {
+      symbol: "USD/KRW",
+      name: "US Dollar / Korean Won",
+      assetType: "FX",
+      market: "FX",
+      currency: "KRW",
+      providers: [{ providerId: "test", providerSymbol: "USD" }],
+    });
+    const btc = await createInstrument(container, {
+      symbol: "BTCUSDT",
+      name: "Bitcoin",
+      assetType: "CRYPTO",
+      market: "BINANCE",
+      currency: "USDT",
+      providers: [],
+    });
+    const day1 = iso("2026-10-11T00:00:00.000Z");
+    const day3 = iso("2026-10-13T00:00:00.000Z");
+
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: btc.instrumentId,
+      type: "BUY",
+      timestamp: day1,
+      quantity: 1,
+      price: 100,
+      currency: "USDT",
+      fee: 0,
+    });
+    await storeDaily(container, fx, 1400, day1);
+    await storeDaily(container, fx, 1300, day3);
+    await storeDaily(container, btc, 100, day1);
+    await storeDaily(container, btc, 110, day3);
+
+    const series = await container.valuation.historySeries(portfolio.portfolioId, {
+      from: day1,
+      to: day3,
+      interval: "daily",
+    });
+
+    // USDT -> USD (peg) -> KRW, using the USD/KRW rate in effect at each point.
+    expect(series.map((point) => point.totalAssetValue)).toEqual([140000, 140000, 143000]);
+  });
 });

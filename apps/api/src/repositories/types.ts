@@ -60,9 +60,17 @@ export interface QuoteRepository {
   getLastBefore(instrumentId: string, before: Date, interval?: DataInterval): Promise<MarketQuote | null>;
 }
 
+export interface FxRateQuery {
+  from?: Date;
+  to?: Date;
+  limit?: number;
+}
+
 export interface FxRateRepository {
   upsertRate(rate: FxRate): Promise<void>;
   getRate(base: string, quote: string, asOf: Date): Promise<FxRate | null>;
+  /** Rates for one pair in [from, to], newest first. Used by history prefetch. */
+  getRates(base: string, quote: string, query?: FxRateQuery): Promise<FxRate[]>;
   getLatest(base: string, quote: string): Promise<FxRate | null>;
   listLatest(): Promise<FxRate[]>;
 }
