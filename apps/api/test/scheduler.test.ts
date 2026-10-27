@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Container } from "../src/container";
 import { startScheduler } from "../src/scheduler";
 import type {
@@ -20,11 +20,15 @@ function emptyResult(): CollectionRunResult {
 }
 
 /** Scheduler wired to a fake collection service that blocks until released. */
-function createScheduler() {
+function createScheduler(
+  overrides: NodeJS.ProcessEnv = {},
+  { gated = true }: { gated?: boolean } = {},
+) {
   const config = createTestConfig({
     COLLECTION_SCHEDULER_ENABLED: "false",
     HOURLY_SNAPSHOT_ENABLED: "false",
     DAILY_SNAPSHOT_ENABLED: "false",
+    ...overrides,
   });
   const runs: string[] = [];
   let release = () => {};
@@ -35,7 +39,7 @@ function createScheduler() {
     collection: {
       run: async (options?: CollectionRunOptions) => {
         runs.push((options?.assetTypes ?? ["ALL"]).join(","));
-        await gate;
+        if (gated) await gate;
         return emptyResult();
       },
     },
@@ -43,6 +47,10 @@ function createScheduler() {
 
   return { scheduler: startScheduler(container, config), runs, release };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("collection scheduler", () => {
   it("runs different asset types concurrently when their timers collide", async () => {
@@ -112,6 +120,37 @@ describe("collection scheduler", () => {
     await second;
     expect(runs).toEqual(["CRYPTO", "CRYPTO"]);
 
+    scheduler.stop();
+  });
+
+  it("refreshes ETFs together with stocks on the stock cadence", async () => {
+    vi.useFakeTimers();
+    const { scheduler, runs } = createScheduler(
+      {
+        COLLECTION_SCHEDULER_ENABLED: "true",
+        STOCK_COLLECTION_INTERVAL_SECONDS: "60",
+        CRYPTO_COLLECTION_INTERVAL_SECONDS: "3600",
+        FX_COLLECTION_INTERVAL_SECONDS: "7200",
+      },
+      { gated: false },
+    );
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(runs).toEqual(["STOCK,ETF"]);
+    scheduler.stop();
+  });
+
+  it("treats ETF and STOCK as overlapping asset types", async () => {
+    const { scheduler, runs, release } = createScheduler();
+
+    const etf = scheduler.runCollection({ assetTypes: ["ETF"] });
+    const stock = await scheduler.runCollection({ assetTypes: ["STOCK", "ETF"] });
+    expect(stock.errors).toEqual(["collection already running"]);
+    expect(runs).toEqual(["ETF"]);
+
+    release();
+    await etf;
     scheduler.stop();
   });
 });

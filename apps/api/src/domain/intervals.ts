@@ -1,4 +1,30 @@
-import type { DataInterval, QuoteInterval } from "@jfolio/shared";
+import type { AssetType, DataInterval, QuoteInterval } from "@jfolio/shared";
+
+/**
+ * Asset types that share one scheduler tick, keyed by the configured interval
+ * section. ETFs use the stock provider and therefore refresh on the stock
+ * cadence; CASH and asset types without a provider have no scheduled tick.
+ */
+export const COLLECTION_SCHEDULES = {
+  STOCK: ["STOCK", "ETF"],
+  CRYPTO: ["CRYPTO"],
+  FX: ["FX"],
+} as const satisfies Record<string, readonly AssetType[]>;
+
+export type CollectionSchedule = keyof typeof COLLECTION_SCHEDULES;
+
+const SCHEDULE_BY_ASSET_TYPE = new Map<AssetType, CollectionSchedule>(
+  (Object.entries(COLLECTION_SCHEDULES) as Array<
+    [CollectionSchedule, readonly AssetType[]]
+  >).flatMap(([schedule, assetTypes]) =>
+    assetTypes.map((assetType) => [assetType, schedule] as const),
+  ),
+);
+
+/** Scheduler section that governs an asset type, or null when it has no tick. */
+export function collectionScheduleFor(assetType: AssetType): CollectionSchedule | null {
+  return SCHEDULE_BY_ASSET_TYPE.get(assetType) ?? null;
+}
 
 /** Canonical duration of each supported interval. `tick` uses 1s as a floor. */
 export const INTERVAL_MS: Record<DataInterval, number> = {

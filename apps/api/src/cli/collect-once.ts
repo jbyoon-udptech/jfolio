@@ -6,7 +6,7 @@ import { startScheduler } from "../scheduler";
 
 /**
  * One-shot collection pass, useful for cron / manual runs:
- *   yarn collect:once [STOCK,CRYPTO,FX]
+ *   yarn collect:once [STOCK,ETF,CRYPTO,FX]
  */
 async function main(): Promise<void> {
   const db = await connectMongo({ uri: config.mongo.uri, dbName: config.mongo.dbName });

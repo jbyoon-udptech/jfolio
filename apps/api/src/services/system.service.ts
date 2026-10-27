@@ -1,5 +1,6 @@
 import type { CollectionJob, DataStatus, ProviderState } from "@jfolio/shared";
 import type { AppConfig } from "../config";
+import { collectionScheduleFor } from "../domain/intervals";
 import type { MarketDataProvider } from "../providers/market-data.provider";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Repositories } from "../repositories/types";
@@ -83,10 +84,12 @@ export class SystemService {
       assetTypes: provider.assetTypes,
       capabilities: provider.capabilities,
       schedulerEnabled: this.schedule.schedulerEnabled,
-      // ETF / CASH have no dedicated scheduler tick, so only asset types with a
-      // configured positive period are reported.
+      // ETF shares the stock tick; CASH and asset types without a configured
+      // positive period have no scheduled collection.
       collectionIntervals: provider.assetTypes.flatMap((assetType) => {
-        const seconds = intervals[assetType];
+        const schedule = collectionScheduleFor(assetType);
+        if (!schedule) return [];
+        const seconds = intervals[schedule];
         return typeof seconds === "number" && seconds > 0
           ? [{ assetType, seconds }]
           : [];

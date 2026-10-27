@@ -1,5 +1,6 @@
 import type { AssetType, PortfolioSnapshot, SnapshotType } from "@jfolio/shared";
 import type { AppConfig } from "../config";
+import { COLLECTION_SCHEDULES, type CollectionSchedule } from "../domain/intervals";
 import type { CollectionRunOptions, CollectionRunResult } from "../services/collection.service";
 import type { Container } from "../container";
 import { msUntilNext, startOfDayInTimeZone, startOfHour } from "./time";
@@ -16,9 +17,10 @@ export interface SchedulerHandle {
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * FR-012 / FR-051: Periodic collection and snapshot scheduling. Collection is
- * per asset type (so crypto can run every few seconds while equities run
- * hourly); snapshots align to hour / local-day boundaries.
+ * FR-012 / FR-051: Periodic collection and snapshot scheduling. Collection runs
+ * per schedule group (stocks and ETFs share the stock cadence so crypto can run
+ * every few seconds while equities run hourly); snapshots align to hour /
+ * local-day boundaries.
  */
 export function startScheduler(container: Container, config: AppConfig): SchedulerHandle {
   const timers: NodeJS.Timeout[] = [];
@@ -84,12 +86,15 @@ export function startScheduler(container: Container, config: AppConfig): Schedul
   };
 
   if (config.collection.schedulerEnabled) {
-    const assetTypes: Array<keyof AppConfig["collection"]["intervals"]> = ["STOCK", "CRYPTO", "FX"];
-    for (const assetType of assetTypes) {
-      const seconds = config.collection.intervals[assetType];
+    const schedules: CollectionSchedule[] = ["STOCK", "CRYPTO", "FX"];
+    for (const schedule of schedules) {
+      const seconds = config.collection.intervals[schedule];
       if (!seconds || seconds <= 0) continue;
+      // STOCK and ETF share one run so the stock provider sees a single job and
+      // both asset types are claimed by the overlap guard.
+      const assetTypes: AssetType[] = [...COLLECTION_SCHEDULES[schedule]];
       const timer = setInterval(() => {
-        void runCollection({ assetTypes: [assetType] });
+        void runCollection({ assetTypes });
       }, seconds * 1000);
       timer.unref?.();
       timers.push(timer);

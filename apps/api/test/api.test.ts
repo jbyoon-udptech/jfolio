@@ -1123,9 +1123,10 @@ describe("8.7 system", () => {
     const byId = new Map(items.map((p) => [p.providerId, p] as const));
     // Test config disables the scheduler, so collection is manual only.
     expect(byId.get("mock")?.schedulerEnabled).toBe(false);
-    // ETF / CASH have no scheduler tick, so only STOCK / CRYPTO / FX are listed.
+    // ETF shares the stock tick; CASH has no scheduled collection.
     expect(byId.get("mock")?.collectionIntervals).toEqual([
       { assetType: "STOCK", seconds: 60 },
+      { assetType: "ETF", seconds: 60 },
       { assetType: "CRYPTO", seconds: 10 },
       { assetType: "FX", seconds: 60 },
     ]);
@@ -1157,6 +1158,7 @@ describe("8.7 system", () => {
     expect(mock?.schedulerEnabled).toBe(true);
     expect(mock?.collectionIntervals).toEqual([
       { assetType: "STOCK", seconds: 300 },
+      { assetType: "ETF", seconds: 300 },
       { assetType: "CRYPTO", seconds: 10 },
       { assetType: "FX", seconds: 60 },
     ]);

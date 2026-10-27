@@ -8,7 +8,7 @@ import type {
 } from "@jfolio/shared";
 import type { AppConfig } from "../config";
 import { newId } from "../domain/ids";
-import { quoteIntervalFromSeconds } from "../domain/intervals";
+import { collectionScheduleFor, quoteIntervalFromSeconds } from "../domain/intervals";
 import type { MarketDataProvider } from "../providers/market-data.provider";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Repositories } from "../repositories/types";
@@ -54,8 +54,8 @@ export class CollectionService {
    * ETF instruments share the stock collection schedule.
    */
   private collectionInterval(instrument: Instrument): QuoteInterval | null {
-    const key = instrument.assetType === "ETF" ? "STOCK" : instrument.assetType;
-    if (key !== "STOCK" && key !== "CRYPTO" && key !== "FX") return null;
+    const key = collectionScheduleFor(instrument.assetType);
+    if (!key) return null;
     const seconds = this.intervals[key];
     return Number.isFinite(seconds) && seconds > 0 ? quoteIntervalFromSeconds(seconds) : null;
   }
