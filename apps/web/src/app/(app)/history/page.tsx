@@ -1,7 +1,10 @@
 import { HistoryFilterForm } from "@/components/HistoryFilterForm";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
+import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
+import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import {
   formatCurrency,
@@ -11,6 +14,8 @@ import {
   formatPrice,
   formatQuantity,
 } from "@/lib/format";
+import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
+import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
 import type { Valuation } from "@/lib/types";
 import { redirect } from "next/navigation";
 
@@ -45,30 +50,42 @@ export default async function HistoryPage({
   const baseCurrency = params.baseCurrency ?? "KRW";
   const asOfDate = params.asOf ?? toDate;
 
+  const cookiePortfolioId = await readSelectedPortfolioCookie();
+  const portfoliosResult = await safe(() => api.portfolios());
+  const selection = resolvePortfolioSelection({
+    searchValue: params.portfolioId,
+    cookieValue: cookiePortfolioId,
+    knownIds: portfoliosResult.data?.items.map((p) => p.portfolioId),
+  });
+
   // Hidden portfolios are not selectable; drop the stale ID and use the default.
-  if (params.portfolioId) {
-    const portfoliosResult = await safe(() => api.portfolios());
-    if (
-      portfoliosResult.data &&
-      !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
-    ) {
-      const next = new URLSearchParams();
-      for (const key of ["from", "to", "interval", "baseCurrency", "asOf"] as const) {
-        const value = params[key];
-        if (value) next.set(key, value);
-      }
-      const qs = next.toString();
-      redirect(qs ? `/history?${qs}` : "/history");
+  if (selection.invalidExplicit) {
+    const next = new URLSearchParams();
+    for (const key of ["from", "to", "interval", "baseCurrency", "asOf"] as const) {
+      const value = params[key];
+      if (value) next.set(key, value);
     }
+    const qs = next.toString();
+    redirect(qs ? `/history?${qs}` : "/history");
   }
 
   const dashboardResult = await safe(() =>
-    api.dashboard({ portfolioId: params.portfolioId, baseCurrency }),
+    api.dashboard({ portfolioId: selection.portfolioId, baseCurrency }),
   );
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
   }
   const portfolioId = dashboardResult.data.portfolioId;
+  const portfolioOptions: Option[] = (portfoliosResult.data?.items ?? []).map((p) => ({
+    value: p.portfolioId,
+    label: `${p.name} (${p.baseCurrency})`,
+  }));
+  const filterParams = new URLSearchParams();
+  for (const key of ["from", "to", "baseCurrency", "interval", "asOf"] as const) {
+    const value = params[key];
+    if (value) filterParams.set(key, value);
+  }
+  const extraQuery = filterParams.toString() || undefined;
 
   const [historyResult, startResult, endResult, asOfResult] = await Promise.all([
     safe(() =>
@@ -95,18 +112,29 @@ export default async function HistoryPage({
 
   return (
     <>
-      <h1 className="page-title">과거 자산 현황</h1>
-      <p className="page-sub">
-        기간과 기준 통화를 선택해 일별/시간별 평가금액 추이와 특정 시점의 보유 현황을 확인합니다.
-      </p>
+      <PageHeader
+        selector={
+          portfolioOptions.length > 0 ? (
+            <PortfolioSelect
+              portfolios={portfolioOptions}
+              currentId={portfolioId}
+              extraQuery={extraQuery}
+              explicitPortfolioId={params.portfolioId}
+            />
+          ) : undefined
+        }
+        title="과거 자산 현황"
+        subtitle="기간과 기준 통화를 선택해 일별/시간별 평가금액 추이와 특정 시점의 보유 현황을 확인합니다."
+      />
 
       <HistoryFilterForm
-        key={`${fromDate}:${toDate}:${baseCurrency}:${interval}:${asOfDate}`}
+        key={`${portfolioId}:${fromDate}:${toDate}:${baseCurrency}:${interval}:${asOfDate}`}
         fromDate={fromDate}
         toDate={toDate}
         baseCurrency={baseCurrency}
         interval={interval}
         asOfDate={asOfDate}
+        portfolioId={selection.portfolioId}
       />
 
       <div className="card" style={{ marginBottom: 16 }}>

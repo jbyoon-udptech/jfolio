@@ -1,10 +1,13 @@
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
+import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -16,21 +19,24 @@ export default async function PortfolioPage({
   searchParams: Promise<{ portfolioId?: string }>;
 }) {
   const params = await searchParams;
-  const [dashboardResult, portfoliosResult] = await Promise.all([
-    safe(() => api.dashboard({ portfolioId: params.portfolioId })),
-    safe(() => api.portfolios()),
-  ]);
+  const cookiePortfolioId = await readSelectedPortfolioCookie();
+  const portfoliosResult = await safe(() => api.portfolios());
+  const selection = resolvePortfolioSelection({
+    searchValue: params.portfolioId,
+    cookieValue: cookiePortfolioId,
+    knownIds: portfoliosResult.data?.items.map((p) => p.portfolioId),
+  });
+  if (selection.invalidExplicit) {
+    redirect("/portfolio");
+  }
+
+  const dashboardResult = await safe(() =>
+    api.dashboard({ portfolioId: selection.portfolioId }),
+  );
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
   }
   const portfolioId = dashboardResult.data.portfolioId;
-  if (
-    params.portfolioId &&
-    portfoliosResult.data &&
-    !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
-  ) {
-    redirect("/portfolio");
-  }
   const holdingsResult = await safe(() => api.holdings(portfolioId));
   if (!holdingsResult.data) {
     return <ApiErrorNotice error={holdingsResult.error} />;
@@ -47,23 +53,27 @@ export default async function PortfolioPage({
 
   return (
     <>
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h1 className="page-title">보유 자산</h1>
-          <p className="page-sub">
-            {holdings.baseCurrency} 기준 · {formatDateTime(holdings.asOf)}
-          </p>
-        </div>
-        <div className="toolbar" style={{ marginBottom: 0, gap: 12 }}>
-          {portfolioOptions.length > 0 ? (
-            <PortfolioSelect portfolios={portfolioOptions} currentId={portfolioId} />
-          ) : null}
-          <a className="btn" href={`/transactions?portfolioId=${portfolioId}`}>
-            거래 내역 편집
-          </a>
-          <StatusBadge status={holdings.dataStatus} />
-        </div>
-      </div>
+      <PageHeader
+        selector={
+          portfolioOptions.length > 0 ? (
+            <PortfolioSelect
+              portfolios={portfolioOptions}
+              currentId={portfolioId}
+              explicitPortfolioId={params.portfolioId}
+            />
+          ) : undefined
+        }
+        actions={
+          <>
+            <a className="btn" href={`/transactions?portfolioId=${portfolioId}`}>
+              거래 내역 편집
+            </a>
+            <StatusBadge status={holdings.dataStatus} />
+          </>
+        }
+        title="보유 자산"
+        subtitle={`${holdings.baseCurrency} 기준 · ${formatDateTime(holdings.asOf)}`}
+      />
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>
         <div className="card">

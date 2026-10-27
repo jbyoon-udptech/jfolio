@@ -1,5 +1,6 @@
 import { CollectionTrigger } from "@/components/CollectionTrigger";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, safe } from "@/lib/api";
 import { formatCollectionInterval, formatDateTime, formatPrice } from "@/lib/format";
@@ -24,16 +25,16 @@ export default async function MarketDataPage() {
 
   return (
     <>
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h1 className="page-title">시장 데이터</h1>
-          <p className="page-sub">
+      <PageHeader
+        actions={<StatusBadge status={status.status} />}
+        title="시장 데이터"
+        subtitle={
+          <>
             데이터 수집 상태와 공급자별 현황을 확인합니다. 마지막 갱신{" "}
             {formatDateTime(status.lastUpdatedAt)}
-          </p>
-        </div>
-        <StatusBadge status={status.status} />
-      </div>
+          </>
+        }
+      />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="toolbar" style={{ justifyContent: "space-between" }}>

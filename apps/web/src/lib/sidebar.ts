@@ -10,7 +10,10 @@ export const SIDEBAR_COOKIE = "jfolio_sidebar";
 
 export type SidebarState = "collapsed" | "expanded";
 
-/** Parse the sidebar cookie value; anything unexpected counts as expanded. */
+/**
+ * Parse the sidebar cookie value. The desktop rail starts collapsed, so a
+ * missing or unrecognized value keeps the menu in its compact icon form.
+ */
 export function parseSidebarState(value: string | undefined): SidebarState {
-  return value === "collapsed" ? "collapsed" : "expanded";
+  return value === "expanded" ? "expanded" : "collapsed";
 }

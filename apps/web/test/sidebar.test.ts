@@ -10,10 +10,13 @@ describe("sidebar cookie state", () => {
     expect(parseSidebarState("collapsed")).toBe("collapsed");
   });
 
-  it("treats expanded, missing and unknown values as expanded", () => {
+  it("defaults missing and unknown values to collapsed", () => {
+    expect(parseSidebarState(undefined)).toBe("collapsed");
+    expect(parseSidebarState("")).toBe("collapsed");
+    expect(parseSidebarState("anything-else")).toBe("collapsed");
+  });
+
+  it("recognizes the expanded value", () => {
     expect(parseSidebarState("expanded")).toBe("expanded");
-    expect(parseSidebarState(undefined)).toBe("expanded");
-    expect(parseSidebarState("")).toBe("expanded");
-    expect(parseSidebarState("anything-else")).toBe("expanded");
   });
 });

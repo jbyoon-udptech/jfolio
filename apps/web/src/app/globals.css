@@ -205,6 +205,88 @@ a {
   margin: 0 0 20px;
 }
 
+/* Page context bar: selector, centered current nav title, and actions. */
+.page-header {
+  min-width: 0;
+}
+
+.page-header-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas: "left title actions";
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.page-header-left {
+  grid-area: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.page-header-selector {
+  min-width: 0;
+}
+
+.page-header-actions {
+  grid-area: actions;
+  justify-self: end;
+  justify-content: flex-end;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.page-header-heading {
+  min-width: 0;
+}
+
+.portfolio-select {
+  display: block;
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.portfolio-select select {
+  width: 100%;
+}
+
+.page-header-title {
+  grid-area: title;
+  display: block;
+  justify-self: center;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  color: var(--text);
+  /* Match the descriptive page title size on every viewport. */
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* The shared header already shows the current nav label. Keep the page
+   heading for assistive technology, but remove it from the visible layout. */
+.page-title-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -935,10 +1017,158 @@ a.btn:hover {
   }
 }
 
+/* --- Mobile off-canvas navigation ---------------------------------------- */
+
+.mobile-nav-toggle,
+.mobile-nav-backdrop,
+.sidebar-close {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--text);
+  }
+
+  .mobile-nav-toggle:hover {
+    border-color: var(--accent);
+    background: var(--panel);
+  }
+
+  .page-header-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .page-header-left {
+    flex: 0 1 auto;
+    gap: 8px;
+  }
+
+  .page-header-selector {
+    flex: 0 1 150px;
+    min-width: 0;
+  }
+
+  .page-header-selector .portfolio-select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-header-actions {
+    flex: 0 1 auto;
+    margin-left: auto;
+  }
+
+  /* The title takes a full row so it stays truly centered while the
+     controls share the first row. */
+  .page-header-title {
+    flex: 1 0 100%;
+    order: 2;
+    max-width: 100%;
+    margin-left: 0;
+  }
+
+  .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(4, 7, 11, 0.62);
+    cursor: pointer;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(280px, 84vw);
+    height: 100vh;
+    height: 100dvh;
+    padding: 20px 14px;
+    border-right: 1px solid var(--border);
+    box-shadow: 18px 0 40px rgba(0, 0, 0, 0.45);
+    overflow-x: hidden;
+    overflow-y: auto;
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+
+  .sidebar.mobile-open {
+    visibility: visible;
+    transform: translateX(0);
+    transition:
+      transform 0.2s ease,
+      visibility 0s;
+  }
+
+  .sidebar-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+  }
+
+  .sidebar-close:hover {
+    background: var(--panel-2);
+    color: var(--text);
+  }
+
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .main {
+    width: 100%;
+    max-width: none;
+    padding: 16px 16px 48px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .loading-progress-indicator {
     width: 100%;
     animation: none;
     opacity: 0.55;
+  }
+
+  .sidebar,
+  .sidebar.mobile-open {
+    transition: none;
+  }
+
+  .sidebar-toggle svg {
+    transition: none;
   }
 }

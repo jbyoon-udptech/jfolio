@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { PriceChart, type PricePoint } from "@/components/PriceChart";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, safe } from "@/lib/api";
@@ -10,7 +11,9 @@ import {
   formatPrice,
   formatQuantity,
 } from "@/lib/format";
-import type { Valuation, ValuedPosition } from "@/lib/types";
+import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
+import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
+import type { ValuedPosition } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,7 @@ export default async function AssetDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const cookiePortfolioId = await readSelectedPortfolioCookie();
   const instrumentResult = await safe(() => api.instrument(id));
   if (!instrumentResult.data) {
     return <ApiErrorNotice error={instrumentResult.error} />;
@@ -29,10 +33,9 @@ export default async function AssetDetailPage({
   const latest = instrument.latestQuote ?? null;
   const priceCurrency = latest?.currency ?? instrument.currency;
 
-  const [quotesResult, portfolioResult, transactionsResult, signalsResult] = await Promise.all([
+  const [quotesResult, portfolioResult, signalsResult] = await Promise.all([
     safe(() => api.quotes(id, { interval: "1d", limit: 120 })),
     safe(() => api.portfolios()),
-    safe(() => api.transactions({ instrumentId: id, limit: 50 })),
     safe(() => api.signalEvents({ instrumentId: id })),
   ]);
 
@@ -41,12 +44,30 @@ export default async function AssetDetailPage({
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
     .map((quote) => ({ timestamp: quote.timestamp, price: quote.price }));
 
-  const defaultPortfolio =
-    portfolioResult.data?.items.find((p) => p.isDefault) ?? portfolioResult.data?.items[0] ?? null;
-  const valuationResult: { data: Valuation; error: null } | { data: null; error: string } | null =
-    defaultPortfolio
-      ? await safe(() => api.valuation(defaultPortfolio.portfolioId))
+  const portfolios = portfolioResult.data?.items ?? [];
+  const selection = resolvePortfolioSelection({
+    cookieValue: cookiePortfolioId,
+    knownIds: portfolioResult.data?.items.map((p) => p.portfolioId),
+  });
+  const selectedPortfolio =
+    selection.portfolioId !== undefined
+      ? (portfolios.find((p) => p.portfolioId === selection.portfolioId) ?? null)
       : null;
+  const valuationPortfolio =
+    selectedPortfolio ?? portfolios.find((p) => p.isDefault) ?? portfolios[0] ?? null;
+
+  const [valuationResult, transactionsResult] = await Promise.all([
+    valuationPortfolio
+      ? safe(() => api.valuation(valuationPortfolio.portfolioId))
+      : Promise.resolve(null),
+    safe(() =>
+      api.transactions({
+        instrumentId: id,
+        portfolioId: selection.portfolioId,
+        limit: 50,
+      }),
+    ),
+  ]);
 
   const position: ValuedPosition | null =
     valuationResult?.data?.positions.find((p) => p.instrumentId === id) ?? null;
@@ -60,24 +81,29 @@ export default async function AssetDetailPage({
 
   return (
     <>
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h1 className="page-title">
+      <PageHeader
+        actions={
+          <Link href="/assets" className="pill">
+            ← 자산 목록
+          </Link>
+        }
+        title={
+          <>
             {instrument.name}{" "}
             <span className="muted" style={{ fontSize: 16 }}>
               {instrument.symbol}
             </span>
-          </h1>
-          <p className="page-sub">
+          </>
+        }
+        subtitle={
+          <>
             {instrument.assetType} · {instrument.market} · {instrument.currency}
             {instrument.isWatchlist ? " · 관심종목" : ""}
             {instrument.isActive ? "" : " · 비활성"}
-          </p>
-        </div>
-        <Link href="/assets" className="pill">
-          ← 자산 목록
-        </Link>
-      </div>
+            {selectedPortfolio ? ` · ${selectedPortfolio.name}` : ""}
+          </>
+        }
+      />
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -201,7 +227,15 @@ export default async function AssetDetailPage({
       </div>
 
       <div className="card">
-        <h2>거래 이력</h2>
+        <h2>
+          거래 이력
+          {selectedPortfolio ? (
+            <span className="muted" style={{ fontSize: 13 }}>
+              {" "}
+              · {selectedPortfolio.name}
+            </span>
+          ) : null}
+        </h2>
         {transactions.length === 0 ? (
           <div className="empty">거래 이력이 없습니다.</div>
         ) : (

@@ -1,4 +1,6 @@
+import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import {
   TransactionForm,
@@ -8,6 +10,8 @@ import {
 import { TransactionRow } from "@/components/TransactionRow";
 import { api, safe } from "@/lib/api";
 import { groupByCurrency } from "@/lib/instrument";
+import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
+import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -19,33 +23,36 @@ export default async function TransactionsPage({
   searchParams: Promise<{ portfolioId?: string; instrumentId?: string }>;
 }) {
   const params = await searchParams;
-  const [portfoliosResult, instrumentsResult, transactionsResult] = await Promise.all([
-    safe(() => api.portfolios()),
-    safe(() => api.instruments()),
-    safe(() =>
-      api.transactions({
-        portfolioId: params.portfolioId,
-        instrumentId: params.instrumentId,
-        limit: 200,
-      }),
-    ),
-  ]);
-
-  if (!transactionsResult.data) {
-    return <ApiErrorNotice error={transactionsResult.error} />;
-  }
+  const cookiePortfolioId = await readSelectedPortfolioCookie();
+  const portfoliosResult = await safe(() => api.portfolios());
+  const selection = resolvePortfolioSelection({
+    searchValue: params.portfolioId,
+    cookieValue: cookiePortfolioId,
+    knownIds: portfoliosResult.data?.items.map((p) => p.portfolioId),
+    allowAll: true,
+  });
 
   // Hidden portfolios are not selectable; drop the stale filter.
-  if (
-    params.portfolioId &&
-    portfoliosResult.data &&
-    !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
-  ) {
+  if (selection.invalidExplicit) {
     redirect(
       params.instrumentId
         ? `/transactions?instrumentId=${encodeURIComponent(params.instrumentId)}`
         : "/transactions",
     );
+  }
+
+  const [instrumentsResult, transactionsResult] = await Promise.all([
+    safe(() => api.instruments()),
+    safe(() =>
+      api.transactions({
+        portfolioId: selection.isAll ? undefined : selection.portfolioId,
+        instrumentId: params.instrumentId,
+        limit: 200,
+      }),
+    ),
+  ]);
+  if (!transactionsResult.data) {
+    return <ApiErrorNotice error={transactionsResult.error} />;
   }
 
   const portfolios = portfoliosResult.data?.items ?? [];
@@ -60,7 +67,7 @@ export default async function TransactionsPage({
     ? allTransactions.length - transactions.length
     : 0;
   const portfolioNameById = new Map(portfolios.map((p) => [p.portfolioId, p.name]));
-  const currentPortfolioId = params.portfolioId ?? "";
+  const currentPortfolioId = selection.portfolioId ?? ALL_PORTFOLIOS_ID;
 
   const portfolioOptions: Option[] = portfolios.map((p) => ({
     value: p.portfolioId,
@@ -79,36 +86,40 @@ export default async function TransactionsPage({
 
   return (
     <>
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h1 className="page-title">거래 내역</h1>
-          <p className="page-sub">
+      <PageHeader
+        selector={
+          portfolioOptions.length > 0 ? (
+            <PortfolioSelect
+              portfolios={portfolioOptions}
+              currentId={currentPortfolioId}
+              allOptionLabel="전체 포트폴리오"
+              allOptionValue={ALL_PORTFOLIOS_ID}
+              extraQuery={
+                params.instrumentId
+                  ? `instrumentId=${encodeURIComponent(params.instrumentId)}`
+                  : undefined
+              }
+              explicitPortfolioId={params.portfolioId}
+            />
+          ) : undefined
+        }
+        title="거래 내역"
+        subtitle={
+          <>
             매수/매도, 입출금, 배당 등 모든 자산 변동을 기록합니다.{" "}
             {hiddenTransactionCount > 0
               ? `표시 ${transactions.length}건 (숨김 포트폴리오 거래 ${hiddenTransactionCount}건 제외).`
               : `총 ${transactionsResult.data.total}건.`}{" "}
             각 행에서 수정·삭제할 수 있습니다.
-          </p>
-        </div>
-        {portfolioOptions.length > 0 ? (
-          <PortfolioSelect
-            portfolios={portfolioOptions}
-            currentId={currentPortfolioId}
-            allOptionLabel="전체 포트폴리오"
-            extraQuery={
-              params.instrumentId
-                ? `instrumentId=${encodeURIComponent(params.instrumentId)}`
-                : undefined
-            }
-          />
-        ) : null}
-      </div>
+          </>
+        }
+      />
 
       {portfolioOptions.length > 0 && instrumentGroups.length > 0 ? (
         <TransactionForm
           portfolios={portfolioOptions}
           instruments={instrumentGroups}
-          defaultPortfolioId={params.portfolioId}
+          defaultPortfolioId={selection.portfolioId}
         />
       ) : (
         <div className="notice" style={{ marginBottom: 16 }}>

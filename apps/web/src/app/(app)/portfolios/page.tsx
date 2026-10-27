@@ -1,4 +1,5 @@
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { PortfolioForm } from "@/components/PortfolioForm";
 import { PortfolioRowActions } from "@/components/PortfolioRowActions";
 import { api, safe } from "@/lib/api";
@@ -28,10 +29,10 @@ export default async function PortfoliosPage({
 
   return (
     <>
-      <h1 className="page-title">포트폴리오</h1>
-      <p className="page-sub">
-        자산을 묶는 단위입니다. 이름·기준 통화를 바꾸거나 기본 포트폴리오를 지정할 수 있습니다.
-      </p>
+      <PageHeader
+        title="포트폴리오"
+        subtitle="자산을 묶는 단위입니다. 이름·기준 통화를 바꾸거나 기본 포트폴리오를 지정할 수 있습니다."
+      />
 
       <PortfolioForm />
 

@@ -17,12 +17,14 @@ export function HistoryFilterForm({
   baseCurrency,
   interval,
   asOfDate,
+  portfolioId,
 }: {
   fromDate: string;
   toDate: string;
   baseCurrency: string;
   interval: "daily" | "hourly";
   asOfDate: string;
+  portfolioId?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -35,6 +37,7 @@ export function HistoryFilterForm({
       const value = formData.get(field);
       if (typeof value === "string" && value) params.set(field, value);
     }
+    if (portfolioId) params.set("portfolioId", portfolioId);
     const query = params.toString();
     startTransition(() => {
       router.push(query ? `/history?${query}` : "/history");

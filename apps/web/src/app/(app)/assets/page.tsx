@@ -1,6 +1,7 @@
 import { AssetForm } from "@/components/AssetForm";
 import { AssetRow } from "@/components/AssetRow";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { api, safe } from "@/lib/api";
 import { ASSET_TYPES } from "@/lib/instrument";
 
@@ -23,11 +24,10 @@ export default async function AssetsPage({
 
   return (
     <>
-      <h1 className="page-title">자산 목록</h1>
-      <p className="page-sub">
-        등록된 자산 마스터를 조회하고 등록·수정·비활성화합니다. 삭제는 이력을 보존하는
-        비활성화(`isActive=false`)로 처리됩니다.
-      </p>
+      <PageHeader
+        title="자산 목록"
+        subtitle="등록된 자산 마스터를 조회하고 등록·수정·비활성화합니다. 삭제는 이력을 보존하는 비활성화(`isActive=false`)로 처리됩니다."
+      />
 
       <AssetForm />
 

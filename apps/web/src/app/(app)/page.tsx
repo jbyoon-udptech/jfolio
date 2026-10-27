@@ -4,6 +4,7 @@ import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
 import { AllocationList } from "@/components/AllocationList";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Option } from "@/components/TransactionForm";
@@ -15,6 +16,8 @@ import {
   formatSignedCurrency,
 } from "@/lib/format";
 import { normalizePeriod, periodRange, PERIODS } from "@/lib/period";
+import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
+import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
 
 export const dynamic = "force-dynamic";
 
@@ -26,27 +29,39 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const period = normalizePeriod(params.period);
-  const [dashboardResult, portfoliosResult] = await Promise.all([
-    safe(() => api.dashboard({ portfolioId: params.portfolioId })),
-    safe(() => api.portfolios()),
-  ]);
+  const cookiePortfolioId = await readSelectedPortfolioCookie();
+  const portfoliosResult = await safe(() => api.portfolios());
+  const selection = resolvePortfolioSelection({
+    searchValue: params.portfolioId,
+    cookieValue: cookiePortfolioId,
+    knownIds: portfoliosResult.data?.items.map((p) => p.portfolioId),
+    allowAll: true,
+  });
+
+  // A hidden portfolio must not remain in view; fall back to the default one.
+  if (selection.invalidExplicit) {
+    redirect(params.period ? `/?period=${encodeURIComponent(params.period)}` : "/");
+  }
+
+  const dashboardResult = await safe(() =>
+    api.dashboard({
+      portfolioId: selection.isAll ? ALL_PORTFOLIOS_ID : selection.portfolioId,
+    }),
+  );
   if (!dashboardResult.data) {
     return <ApiErrorNotice error={dashboardResult.error} />;
   }
   const dashboard = dashboardResult.data;
   const currency = dashboard.baseCurrency;
-
-  // A hidden portfolio must not remain in view; fall back to the default one.
-  if (
-    params.portfolioId &&
-    params.portfolioId !== ALL_PORTFOLIOS_ID &&
-    portfoliosResult.data &&
-    !portfoliosResult.data.items.some((p) => p.portfolioId === params.portfolioId)
-  ) {
-    redirect(params.period ? `/?period=${encodeURIComponent(params.period)}` : "/");
-  }
-
   const range = periodRange(period);
+  // Keep an actual selection (explicit URL or cookie) in period links. A page
+  // that merely fell back to the API default should not turn that default into
+  // an implicit saved selection.
+  const portfolioQuery = selection.isAll
+    ? `&portfolioId=${ALL_PORTFOLIOS_ID}`
+    : selection.portfolioId
+      ? `&portfolioId=${encodeURIComponent(selection.portfolioId)}`
+      : "";
   const historyResult = await safe(() =>
     api.dashboardHistory({
       portfolioId: dashboard.portfolioId,
@@ -64,26 +79,23 @@ export default async function DashboardPage({
 
   return (
     <>
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h1 className="page-title">전체 자산 대시보드</h1>
-          <p className="page-sub">
-            기준 통화 {currency} · 기준 시각 {formatDateTime(dashboard.asOf)}
-          </p>
-        </div>
-        <div className="toolbar" style={{ marginBottom: 0, gap: 12 }}>
-          {portfolioOptions.length > 0 ? (
+      <PageHeader
+        selector={
+          portfolioOptions.length > 0 ? (
             <PortfolioSelect
               portfolios={portfolioOptions}
               currentId={dashboard.portfolioId}
               extraQuery={params.period ? `period=${params.period}` : undefined}
+              explicitPortfolioId={params.portfolioId}
               allOptionLabel="All"
               allOptionValue={ALL_PORTFOLIOS_ID}
             />
-          ) : null}
-          <StatusBadge status={dashboard.dataStatus} />
-        </div>
-      </div>
+          ) : undefined
+        }
+        actions={<StatusBadge status={dashboard.dataStatus} />}
+        title="전체 자산 대시보드"
+        subtitle={`기준 통화 ${currency} · 기준 시각 ${formatDateTime(dashboard.asOf)}`}
+      />
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -133,7 +145,7 @@ export default async function DashboardPage({
             {PERIODS.map((option) => (
               <Link
                 key={option}
-                href={`/?period=${option}${params.portfolioId ? `&portfolioId=${params.portfolioId}` : ""}`}
+                href={`/?period=${option}${portfolioQuery}`}
                 className={`pill ${option === period ? "active" : ""}`}
               >
                 {option}

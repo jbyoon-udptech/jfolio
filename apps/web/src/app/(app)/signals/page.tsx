@@ -1,4 +1,5 @@
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageHeader } from "@/components/PageHeader";
 import { SignalRuleActions } from "@/components/SignalRuleActions";
 import { SignalRuleForm } from "@/components/SignalRuleForm";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -41,11 +42,10 @@ export default async function SignalsPage() {
 
   return (
     <>
-      <h1 className="page-title">시그널</h1>
-      <p className="page-sub">
-        가격/포트폴리오 조건을 정의하고, 조건 충족 시 발생한 이력을 확인합니다. 동일 조건이 지속되는 동안에는
-        중복 발생하지 않습니다.
-      </p>
+      <PageHeader
+        title="시그널"
+        subtitle="가격/포트폴리오 조건을 정의하고, 조건 충족 시 발생한 이력을 확인합니다. 동일 조건이 지속되는 동안에는 중복 발생하지 않습니다."
+      />
 
       {instrumentOptions.length > 0 ? (
         <SignalRuleForm instruments={instrumentOptions} portfolios={portfolioOptions} />

@@ -23,8 +23,8 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "대시보드", icon: "dashboard" },
   { href: "/portfolio", label: "보유 자산", icon: "portfolio" },
   { href: "/history", label: "과거 자산", icon: "history" },
-  { href: "/assets", label: "자산 목록", icon: "assets" },
   { href: "/transactions", label: "거래 내역", icon: "transactions" },
+  { href: "/assets", label: "자산 목록", icon: "assets" },
   { href: "/portfolios", label: "포트폴리오", icon: "portfolios" },
   { href: "/signals", label: "시그널", icon: "signals" },
   { href: "/market-data", label: "시장 데이터", icon: "market" },
@@ -38,4 +38,9 @@ export const NAV_LINKS: NavLink[] = [
 export function isNavActive(href: string, pathname: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** Returns the nav link that owns `pathname`, or `undefined` outside the nav. */
+export function findNavLink(pathname: string): NavLink | undefined {
+  return NAV_LINKS.find((link) => isNavActive(link.href, pathname));
 }
