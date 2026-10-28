@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
 import { AllDashboardSections } from "@/components/AllDashboardSections";
 import { AllocationList } from "@/components/AllocationList";
+import { DashboardHoldingsTable } from "@/components/DashboardHoldingsTable";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
 import { PageHeader } from "@/components/PageHeader";
@@ -11,12 +12,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import {
-  EMPTY,
-  UNAVAILABLE,
   formatCurrency,
   formatDateTime,
   formatPercent,
-  formatPrice,
   formatSignedCurrency,
 } from "@/lib/format";
 import { normalizePeriod, periodRange, PERIODS } from "@/lib/period";
@@ -201,56 +199,10 @@ export default async function DashboardPage({
       </div>
 
       <div className="grid cols-2">
-        <div className="card">
-          <h2>보유 종목</h2>
-          {dashboard.topHoldings.length === 0 ? (
-            <div className="empty">보유 종목이 없습니다.</div>
-          ) : (
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th>종목</th>
-                  <th className="num">
-                    <span className="th-main">평가금액</span>
-                    <span className="th-sub">현재가</span>
-                  </th>
-                  <th className="num">
-                    <span className="th-main">수익율</span>
-                    <span className="th-sub">전일대비</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {dashboard.topHoldings.map((holding) => (
-                  <tr key={holding.instrumentId}>
-                    <td>
-                      <Link href={`/assets/${holding.instrumentId}`}>{holding.name}</Link>
-                      <div className="cell-sub muted">{holding.symbol}</div>
-                    </td>
-                    <td className="num">
-                      {holding.marketValueBase === null
-                        ? UNAVAILABLE
-                        : formatCurrency(holding.marketValueBase, currency)}
-                      <div className="cell-sub muted">
-                        {holding.price === null
-                          ? EMPTY
-                          : formatPrice(holding.price, holding.priceCurrency)}
-                      </div>
-                    </td>
-                    <td className={`num ${changeClass(holding.unrealizedReturn)}`}>
-                      {formatPercent(holding.unrealizedReturn)}
-                      <div
-                        className={`cell-sub ${changeClass(holding.dailyChangeRate)}`}
-                      >
-                        {formatPercent(holding.dailyChangeRate)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <DashboardHoldingsTable
+          holdings={dashboard.topHoldings}
+          currency={currency}
+        />
 
         <div className="card">
           <h2>최근 시그널</h2>

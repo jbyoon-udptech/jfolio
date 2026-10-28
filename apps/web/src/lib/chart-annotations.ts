@@ -110,3 +110,20 @@ export function findChartExtremeAnnotations(
     changeRate: item.changeRate,
   }));
 }
+
+export interface ValueChartPoint {
+  asOf: string;
+  value: number | null | undefined;
+}
+
+/** Single-series wrapper for charts whose points use a generic `value` field. */
+export function findValueChartExtremeAnnotations(
+  points: readonly ValueChartPoint[],
+): ChartExtremeAnnotation[] {
+  return findChartExtremeAnnotations(
+    points.map((point) => ({
+      asOf: point.asOf,
+      totalAssetValue: point.value,
+    })),
+  );
+}

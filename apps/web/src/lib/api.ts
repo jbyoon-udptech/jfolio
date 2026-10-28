@@ -186,7 +186,10 @@ export const api = {
     request<ListResponse<Instrument>>(`/assets${query(params)}`),
   instrument: (id: string) =>
     request<Instrument & { latestQuote: MarketQuote | null }>(`/assets/${id}`),
-  quotes: (id: string, params: { interval?: string; limit?: number } = {}) =>
+  quotes: (
+    id: string,
+    params: { interval?: string; from?: string; to?: string; limit?: number } = {},
+  ) =>
     request<{ instrumentId: string; items: MarketQuote[]; total: number }>(
       `/assets/${id}/quotes${query(params)}`,
     ),

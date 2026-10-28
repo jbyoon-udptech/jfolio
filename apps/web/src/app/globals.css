@@ -498,6 +498,31 @@ th.num {
   color: var(--text);
 }
 
+/* Dashboard holdings are split into currency blocks, ordered KRW/USD/USDT. */
+.holdings-currency-group + .holdings-currency-group {
+  margin-top: 18px;
+}
+
+.holdings-currency-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.holdings-currency-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;
@@ -619,6 +644,10 @@ a.btn:hover {
   border: 1px solid var(--border);
   font-size: 12px;
   color: var(--muted);
+}
+
+button.pill {
+  background: transparent;
 }
 
 .pill.active {

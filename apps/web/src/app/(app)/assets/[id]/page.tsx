@@ -11,6 +11,7 @@ import {
   formatPrice,
   formatQuantity,
 } from "@/lib/format";
+import { normalizePeriod, periodRange, PERIODS } from "@/lib/period";
 import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
 import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
 import type { ValuedPosition } from "@/lib/types";
@@ -20,10 +21,15 @@ export const dynamic = "force-dynamic";
 /** UI-003: individual asset detail. */
 export default async function AssetDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   const { id } = await params;
+  const search = await searchParams;
+  const period = normalizePeriod(search.period);
+  const range = periodRange(period);
   const cookiePortfolioId = await readSelectedPortfolioCookie();
   const instrumentResult = await safe(() => api.instrument(id));
   if (!instrumentResult.data) {
@@ -34,15 +40,35 @@ export default async function AssetDetailPage({
   const priceCurrency = latest?.currency ?? instrument.currency;
 
   const [quotesResult, portfolioResult, signalsResult] = await Promise.all([
-    safe(() => api.quotes(id, { interval: "1d", limit: 120 })),
+    safe(() =>
+      api.quotes(id, {
+        interval: range.interval === "hourly" ? undefined : "1d",
+        from: range.from.toISOString(),
+        to: range.to.toISOString(),
+        limit: 5000,
+      }),
+    ),
     safe(() => api.portfolios()),
     safe(() => api.signalEvents({ instrumentId: id })),
   ]);
 
-  const quotes = quotesResult.data?.items ?? [];
-  const pricePoints: PricePoint[] = [...quotes]
+  // The intraday request intentionally includes every stored interval so live
+  // quotes are not hidden behind the daily-close filter. Collapse rows that
+  // share a timestamp before drawing the line.
+  const quotes = [...(quotesResult.data?.items ?? [])]
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    .map((quote) => ({ timestamp: quote.timestamp, price: quote.price }));
+    .filter(
+      (quote, index, items) =>
+        index === 0 || quote.timestamp !== items[index - 1]?.timestamp,
+    );
+  const pricePoints: PricePoint[] = quotes.map((quote) => ({
+    timestamp: quote.timestamp,
+    price: quote.price,
+  }));
+  const chartTitle =
+    range.interval === "hourly"
+      ? "기간별 가격 (시간별 시세)"
+      : "기간별 가격 (일별 종가)";
 
   const portfolios = portfolioResult.data?.items ?? [];
   const selection = resolvePortfolioSelection({
@@ -145,12 +171,29 @@ export default async function AssetDetailPage({
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="toolbar">
-          <h2 style={{ margin: 0 }}>기간별 가격 (일별 종가)</h2>
+          <h2 style={{ margin: 0 }}>{chartTitle}</h2>
+          <div className="pill-row" style={{ marginLeft: "auto" }}>
+            {PERIODS.map((option) => (
+              <Link
+                key={option}
+                href={`/assets/${id}?period=${option}`}
+                className={`pill ${option === period ? "active" : ""}`}
+              >
+                {option}
+              </Link>
+            ))}
+          </div>
         </div>
-        <PriceChart points={pricePoints} currency={priceCurrency} />
-        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-          누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
-        </div>
+        <PriceChart
+          points={pricePoints}
+          currency={priceCurrency}
+          interval={range.interval}
+        />
+        {pricePoints.some((point) => point.price === null) ? (
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
+          </div>
+        ) : null}
       </div>
 
       <div className="grid cols-2" style={{ marginBottom: 16 }}>

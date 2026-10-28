@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findChartExtremeAnnotations,
   findSeriesChartExtremes,
+  findValueChartExtremeAnnotations,
 } from "@/lib/chart-annotations";
 import type { ChartPoint } from "@/lib/chart-annotations";
 
@@ -29,6 +30,19 @@ describe("chart extreme annotations", () => {
       value: 500,
       changeRate: 60,
     });
+  });
+
+  it("annotates generic value points such as price series", () => {
+    const [max, min] = findValueChartExtremeAnnotations([
+      { asOf: "2026-10-01T00:00:00.000Z", value: 100 },
+      { asOf: "2026-10-03T00:00:00.000Z", value: 150 },
+      { asOf: "2026-10-15T00:00:00.000Z", value: 90 },
+      { asOf: "2026-10-20T00:00:00.000Z", value: 120 },
+    ]);
+
+    expect(max).toMatchObject({ kind: "max", index: 1, value: 150, changeRate: -20 });
+    expect(min).toMatchObject({ kind: "min", index: 2, value: 90 });
+    expect(min?.changeRate).toBeCloseTo(100 / 3);
   });
 
   it("skips unavailable points and uses the last finite point as current", () => {
