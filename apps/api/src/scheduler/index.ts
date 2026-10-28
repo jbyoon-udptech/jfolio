@@ -2,8 +2,18 @@ import type { AssetType, PortfolioSnapshot, SnapshotType } from "@jfolio/shared"
 import type { AppConfig } from "../config";
 import { COLLECTION_SCHEDULES, type CollectionSchedule } from "../domain/intervals";
 import type { CollectionRunOptions, CollectionRunResult } from "../services/collection.service";
+import type { BackfillRunResult } from "../services/historical-backfill.service";
 import type { Container } from "../container";
-import { msUntilNext, startOfDayInTimeZone, startOfHour } from "./time";
+import { msUntilNext, startOfDayInTimeZone, startOfHour, startOfUtcDay } from "./time";
+
+export interface SchedulerOptions {
+  /**
+   * Fill missing daily quotes once at startup. Long-running servers also run at
+   * UTC midnight; one-shot CLIs disable the startup pass so they do not launch
+   * a background backfill while shutting down.
+   */
+  catchUpDailyQuotes?: boolean;
+}
 
 export interface SchedulerHandle {
   /** Stop all timers. Safe to call multiple times. */
@@ -12,17 +22,28 @@ export interface SchedulerHandle {
   runCollection(options?: CollectionRunOptions): Promise<CollectionRunResult>;
   /** Create snapshots for every portfolio at the given type + boundary. */
   runSnapshots(type: SnapshotType, asOf?: Date): Promise<PortfolioSnapshot[]>;
+  /** Fill missing 1d quotes from after the newest stored day through yesterday (UTC). */
+  runDailyQuoteBackfill(): Promise<BackfillRunResult>;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 /**
  * FR-012 / FR-051: Periodic collection and snapshot scheduling. Collection runs
  * per schedule group (stocks and ETFs share the stock cadence so crypto can run
  * every few seconds while equities run hourly); snapshots align to hour /
  * local-day boundaries.
+ *
+ * Daily quotes use the UTC-day boundary instead of the display timezone: by the
+ * time the UTC day changes, the previous session's daily bar is complete for
+ * every supported provider/market.
  */
-export function startScheduler(container: Container, config: AppConfig): SchedulerHandle {
+export function startScheduler(
+  container: Container,
+  config: AppConfig,
+  options: SchedulerOptions = {},
+): SchedulerHandle {
   const timers: NodeJS.Timeout[] = [];
   // Runs are tracked per asset type: timers with the same interval (e.g. all
   // 600s) fire at the same instant, and a shared flag would let the first one
@@ -85,6 +106,30 @@ export function startScheduler(container: Container, config: AppConfig): Schedul
     return results;
   };
 
+  // Coalesce concurrent triggers (startup catch-up + a timer firing at the
+  // same instant) so providers are not hit twice for the same gap.
+  let dailyQuoteBackfill: Promise<BackfillRunResult> | null = null;
+  const runDailyQuoteBackfill = (): Promise<BackfillRunResult> => {
+    if (dailyQuoteBackfill) return dailyQuoteBackfill;
+    const task = container.backfill.backfillIncrementalDaily().then((result) => {
+      if (result.inserted > 0 || result.failed > 0) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[scheduler] daily quotes: instruments=${result.instrumentsProcessed} ` +
+            `inserted=${result.inserted} duplicates=${result.duplicates} failed=${result.failed}`,
+        );
+      }
+      return result;
+    });
+    dailyQuoteBackfill = task;
+    void task
+      .catch(() => undefined)
+      .finally(() => {
+        if (dailyQuoteBackfill === task) dailyQuoteBackfill = null;
+      });
+    return task;
+  };
+
   if (config.collection.schedulerEnabled) {
     const schedules: CollectionSchedule[] = ["STOCK", "CRYPTO", "FX"];
     for (const schedule of schedules) {
@@ -99,6 +144,20 @@ export function startScheduler(container: Container, config: AppConfig): Schedul
       timer.unref?.();
       timers.push(timer);
     }
+
+    // Fill any days missed while the process was down, then keep daily history
+    // current at each UTC date change.
+    if (options.catchUpDailyQuotes ?? true) {
+      void runDailyQuoteBackfill().catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error("[scheduler] daily quote catch-up failed:", error);
+      });
+    }
+    scheduleAligned(
+      timers,
+      (from) => msUntilNext(startOfUtcDay, from, DAY_MS),
+      runDailyQuoteBackfill,
+    );
   }
 
   if (config.snapshot.hourlyEnabled) {
@@ -112,10 +171,9 @@ export function startScheduler(container: Container, config: AppConfig): Schedul
   if (config.snapshot.dailyEnabled) {
     const timeZone = config.timezone;
     const dailyBoundary = (date: Date) => startOfDayInTimeZone(date, timeZone);
-    const dayMs = 24 * HOUR_MS;
     scheduleAligned(
       timers,
-      (from) => msUntilNext(dailyBoundary, from, dayMs),
+      (from) => msUntilNext(dailyBoundary, from, DAY_MS),
       () => runSnapshots("DAILY", dailyBoundary(new Date())),
     );
   }
@@ -127,6 +185,7 @@ export function startScheduler(container: Container, config: AppConfig): Schedul
     },
     runCollection,
     runSnapshots,
+    runDailyQuoteBackfill,
   };
 }
 

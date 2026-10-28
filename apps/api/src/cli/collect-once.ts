@@ -11,7 +11,7 @@ import { startScheduler } from "../scheduler";
 async function main(): Promise<void> {
   const db = await connectMongo({ uri: config.mongo.uri, dbName: config.mongo.dbName });
   const container = createContainer(createMongoRepositories(db), config);
-  const scheduler = startScheduler(container, config);
+  const scheduler = startScheduler(container, config, { catchUpDailyQuotes: false });
 
   const requested = process.argv[2]?.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
   const assetTypes = requested as import("@jfolio/shared").AssetType[] | undefined;

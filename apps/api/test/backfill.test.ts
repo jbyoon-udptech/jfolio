@@ -174,6 +174,142 @@ describe("historical backfill", () => {
   });
 });
 
+describe("incremental daily backfill", () => {
+  it("creates the daily bar for the first completed UTC day after the newest one", async () => {
+    const { container } = createTestContext();
+    const instrument = await createInstrument(container, {
+      symbol: "005930",
+      name: "Samsung Electronics",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    await container.backfill.backfillInstrument(instrument, {
+      from: new Date("2026-10-14T00:00:00.000Z"),
+      to: new Date("2026-10-14T23:59:59.999Z"),
+    });
+
+    const result = await container.backfill.backfillIncrementalDaily();
+
+    expect(result.instrumentsProcessed).toBe(1);
+    expect(result.succeeded).toBe(1);
+    expect(result.inserted).toBe(1);
+    expect(result.results[0]).toMatchObject({
+      interval: "1d",
+      from: "2026-10-15T00:00:00.000Z",
+      to: "2026-10-15T23:59:59.999Z",
+    });
+
+    const stored = await container.marketData.getHistorical(instrument.instrumentId, {
+      interval: "1d",
+      from: new Date("2026-10-14T00:00:00.000Z"),
+      to: new Date("2026-10-15T23:59:59.999Z"),
+    });
+    expect(stored.map((quote) => quote.timestamp.toISOString())).toEqual([
+      "2026-10-15T00:00:00.000Z",
+      "2026-10-14T00:00:00.000Z",
+    ]);
+  });
+
+  it("fills every missing day after a multi-day outage", async () => {
+    const { container } = createTestContext();
+    const instrument = await createInstrument(container, {
+      symbol: "005930",
+      name: "Samsung Electronics",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    await container.backfill.backfillInstrument(instrument, {
+      from: new Date("2026-10-10T00:00:00.000Z"),
+      to: new Date("2026-10-10T23:59:59.999Z"),
+    });
+
+    const result = await container.backfill.backfillIncrementalDaily();
+
+    expect(result.inserted).toBe(5); // 10-11 through 10-15
+    expect(result.results[0]?.from).toBe("2026-10-11T00:00:00.000Z");
+    expect(result.results[0]?.to).toBe("2026-10-15T23:59:59.999Z");
+  });
+
+  it("is a no-op when the newest daily bar is the last completed UTC day", async () => {
+    const { container } = createTestContext();
+    const instrument = await createInstrument(container, {
+      symbol: "005930",
+      name: "Samsung Electronics",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    await container.backfill.backfillInstrument(instrument, {
+      from: new Date("2026-10-15T00:00:00.000Z"),
+      to: new Date("2026-10-15T23:59:59.999Z"),
+    });
+
+    const result = await container.backfill.backfillIncrementalDaily();
+
+    expect(result.skipped).toBe(1);
+    expect(result.inserted).toBe(0);
+    expect(result.results[0]?.message).toBe("daily history is up to date");
+
+    // The current UTC day is still forming and must not be stored.
+    const currentDay = await container.marketData.getHistorical(instrument.instrumentId, {
+      interval: "1d",
+      from: new Date("2026-10-16T00:00:00.000Z"),
+      to: new Date("2026-10-16T23:59:59.999Z"),
+    });
+    expect(currentDay).toHaveLength(0);
+  });
+
+  it("starts from the initial backfill window when no daily quote exists", async () => {
+    const { container } = createTestContext();
+    const portfolio = await createPortfolio(container);
+    const instrument = await createInstrument(container, {
+      symbol: "AAPL",
+      name: "Apple Inc.",
+      assetType: "STOCK",
+      market: "NASDAQ",
+      currency: "KRW",
+      providers: [],
+    });
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: instrument.instrumentId,
+      type: "BUY",
+      timestamp: new Date("2026-10-10T00:00:00.000Z"),
+      quantity: 1,
+      price: 100,
+      fee: 0,
+    });
+
+    const result = await container.backfill.backfillIncrementalDaily();
+
+    expect(result.results[0]?.from).toBe("2026-10-09T00:00:00.000Z");
+    expect(result.results[0]?.to).toBe("2026-10-15T23:59:59.999Z");
+    expect(result.inserted).toBe(7); // 10-09 through 10-15
+  });
+
+  it("skips cash instruments without a market data provider", async () => {
+    const { container } = createTestContext();
+    await createInstrument(container, {
+      symbol: "KRW",
+      name: "Korean Won",
+      assetType: "CASH",
+      market: "CASH",
+      currency: "KRW",
+      providers: [],
+    });
+
+    const result = await container.backfill.backfillIncrementalDaily();
+
+    expect(result.skipped).toBe(1);
+    expect(result.results[0]?.message).toContain("no market data provider");
+  });
+});
+
 describe("automatic backfill on asset creation", () => {
   it("fills history in the background without blocking the create response", async () => {
     const { container } = createTestContext(FIXED_NOW, {

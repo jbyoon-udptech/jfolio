@@ -54,6 +54,13 @@ export function startOfHour(date: Date): Date {
   return result;
 }
 
+/** UTC instant of the start of the UTC day containing `date`. */
+export function startOfUtcDay(date: Date): Date {
+  const result = new Date(date.getTime());
+  result.setUTCHours(0, 0, 0, 0);
+  return result;
+}
+
 /** UTC instant of local midnight for the calendar day containing `date`. */
 export function startOfDayInTimeZone(date: Date, timeZone: string): Date {
   const p = partsInTimeZone(date, timeZone);

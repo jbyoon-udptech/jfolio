@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { msUntilNext, startOfDayInTimeZone, startOfHour } from "../src/scheduler/time";
+import { msUntilNext, startOfDayInTimeZone, startOfHour, startOfUtcDay } from "../src/scheduler/time";
 import { createInstrument, createPortfolio, createTestContext, makeQuote } from "./helpers";
 import type { Instrument } from "@jfolio/shared";
 
@@ -272,6 +272,13 @@ describe("14.3 historical data", () => {
       25 * 60_000 + 4_000,
     );
     expect(msUntilNext(startOfHour, iso("2026-10-16T12:00:00.000Z"), 3_600_000)).toBe(3_600_000);
+    // Daily quote generation aligns to the UTC day, not the display timezone.
+    expect(startOfUtcDay(iso("2026-10-15T23:59:59.999Z")).toISOString()).toBe(
+      "2026-10-15T00:00:00.000Z",
+    );
+    expect(msUntilNext(startOfUtcDay, iso("2026-10-16T12:00:00.000Z"), 86_400_000)).toBe(
+      12 * 3_600_000,
+    );
   });
 
   it("H-006: historySeries reconstructs a past series and skips unavailable points", async () => {

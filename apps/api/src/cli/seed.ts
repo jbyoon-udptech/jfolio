@@ -340,7 +340,7 @@ async function main(): Promise<void> {
   }
 
   // Best-effort first collection so the dashboard is not empty.
-  const scheduler = startScheduler(container, config);
+  const scheduler = startScheduler(container, config, { catchUpDailyQuotes: false });
   try {
     const result = await scheduler.runCollection();
     // eslint-disable-next-line no-console

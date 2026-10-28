@@ -5,6 +5,7 @@ import type {
   CollectionRunOptions,
   CollectionRunResult,
 } from "../src/services/collection.service";
+import type { BackfillRunResult } from "../src/services/historical-backfill.service";
 import { createTestConfig } from "./helpers";
 
 function emptyResult(): CollectionRunResult {
@@ -19,10 +20,26 @@ function emptyResult(): CollectionRunResult {
   };
 }
 
-/** Scheduler wired to a fake collection service that blocks until released. */
+function emptyBackfillResult(): BackfillRunResult {
+  return {
+    instrumentsProcessed: 0,
+    succeeded: 0,
+    skipped: 0,
+    failed: 0,
+    inserted: 0,
+    duplicates: 0,
+    rejected: 0,
+    results: [],
+  };
+}
+
+/** Scheduler wired to fake collection/backfill services. */
 function createScheduler(
   overrides: NodeJS.ProcessEnv = {},
-  { gated = true }: { gated?: boolean } = {},
+  {
+    gated = true,
+    catchUpDailyQuotes,
+  }: { gated?: boolean; catchUpDailyQuotes?: boolean } = {},
 ) {
   const config = createTestConfig({
     COLLECTION_SCHEDULER_ENABLED: "false",
@@ -31,6 +48,7 @@ function createScheduler(
     ...overrides,
   });
   const runs: string[] = [];
+  const dailyBackfills: string[] = [];
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -43,9 +61,20 @@ function createScheduler(
         return emptyResult();
       },
     },
+    backfill: {
+      backfillIncrementalDaily: async () => {
+        dailyBackfills.push("run");
+        return emptyBackfillResult();
+      },
+    },
   } as unknown as Container;
 
-  return { scheduler: startScheduler(container, config), runs, release };
+  return {
+    scheduler: startScheduler(container, config, { catchUpDailyQuotes }),
+    runs,
+    release,
+    dailyBackfills,
+  };
 }
 
 afterEach(() => {
@@ -151,6 +180,48 @@ describe("collection scheduler", () => {
 
     release();
     await etf;
+    scheduler.stop();
+  });
+});
+
+describe("daily quote scheduler", () => {
+  it("fills missing daily quotes at startup and at UTC midnight", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-16T12:00:00.000Z"));
+    const { scheduler, dailyBackfills } = createScheduler(
+      {
+        COLLECTION_SCHEDULER_ENABLED: "true",
+        STOCK_COLLECTION_INTERVAL_SECONDS: "86400",
+        CRYPTO_COLLECTION_INTERVAL_SECONDS: "86400",
+        FX_COLLECTION_INTERVAL_SECONDS: "86400",
+      },
+      { gated: false },
+    );
+
+    expect(dailyBackfills).toEqual(["run"]);
+    // 12:00 UTC is 12 hours before the next UTC-day boundary.
+    await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000);
+    expect(dailyBackfills).toEqual(["run", "run"]);
+
+    scheduler.stop();
+  });
+
+  it("can skip the startup catch-up for one-shot CLIs", () => {
+    const { scheduler, dailyBackfills } = createScheduler(
+      { COLLECTION_SCHEDULER_ENABLED: "true" },
+      { gated: false, catchUpDailyQuotes: false },
+    );
+
+    expect(dailyBackfills).toEqual([]);
+    scheduler.stop();
+  });
+
+  it("exposes a manual daily backfill trigger", async () => {
+    const { scheduler, dailyBackfills } = createScheduler({}, { gated: false });
+
+    await scheduler.runDailyQuoteBackfill();
+
+    expect(dailyBackfills).toEqual(["run"]);
     scheduler.stop();
   });
 });

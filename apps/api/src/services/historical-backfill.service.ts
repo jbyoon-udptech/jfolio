@@ -1,4 +1,5 @@
 import type { AssetType, DataInterval, Instrument } from "@jfolio/shared";
+import { floorToInterval } from "../domain/intervals";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Repositories } from "../repositories/types";
 import type { CollectionService } from "./collection.service";
@@ -98,6 +99,45 @@ export class HistoricalBackfillService {
     return summarize(results);
   }
 
+  /**
+   * Fill the daily gap left by downtime. Starts on the UTC day after the newest
+   * stored `1d` quote and ends at the last completed UTC day, so a normal run
+   * creates one bar while a long outage creates every missing day in one pass.
+   *
+   * The endpoint is deliberately the last completed UTC day: provider daily
+   * bars are timestamped at the start of their session, and storing a bar that
+   * is still forming would be permanent because quote inserts never overwrite.
+   */
+  async backfillIncrementalDaily(
+    options: Pick<BackfillOptions, "assetTypes" | "instrumentIds"> = {},
+  ): Promise<BackfillRunResult> {
+    const instruments = await this.selectInstruments(options);
+    const results: InstrumentBackfillResult[] = [];
+    const now = this.now();
+    const to = this.lastCompletedUtcDayEnd(now);
+    for (const instrument of instruments) {
+      try {
+        const from = await this.incrementalFrom(instrument, now);
+        const range = { from, to, interval: "1d" as const };
+        if (from.getTime() >= to.getTime()) {
+          results.push({
+            ...this.baseResult(instrument, range),
+            message: "daily history is up to date",
+          });
+          continue;
+        }
+        results.push(await this.backfillInstrument(instrument, range));
+      } catch (error) {
+        results.push({
+          ...this.baseResult(instrument, { interval: "1d" }),
+          status: "ERROR",
+          message: errorMessage(error),
+        });
+      }
+    }
+    return summarize(results);
+  }
+
   async backfillInstrument(
     instrument: Instrument,
     options: BackfillOptions = {},
@@ -172,6 +212,28 @@ export class HistoricalBackfillService {
     const first = earliest.items[0];
     if (first) return new Date(first.timestamp.getTime() - DAY_MS);
     return this.lookbackStart(this.defaultDays);
+  }
+
+  /**
+   * Resume on the UTC day after the newest stored daily bar. Daily bars are
+   * timestamped at the start of their session, so flooring the timestamp gives
+   * the calendar date even for exchange-local bars (e.g. a 13:30Z US open).
+   */
+  private async incrementalFrom(instrument: Instrument, now: Date): Promise<Date> {
+    const last = await this.repos.quotes.getLastBefore(
+      instrument.instrumentId,
+      new Date(now.getTime() + 1),
+      "1d",
+    );
+    if (!last) return this.resolveFrom(instrument, {});
+    return new Date(floorToInterval(last.timestamp, "1d").getTime() + DAY_MS);
+  }
+
+  /** End of the UTC day before `now`; the current day is still forming. */
+  private lastCompletedUtcDayEnd(now: Date): Date {
+    const start = new Date(now.getTime());
+    start.setUTCHours(0, 0, 0, 0);
+    return new Date(start.getTime() - 1);
   }
 
   private lookbackStart(days: number): Date {

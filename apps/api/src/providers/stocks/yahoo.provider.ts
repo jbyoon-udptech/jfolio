@@ -176,7 +176,11 @@ export class YahooStockProvider implements MarketDataProvider {
     }
     const spanDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / DAY_MS));
     const range = spanDays <= 1 ? "1d" : spanDays <= 7 ? "7d" : spanDays <= 60 ? "60d" : "1y";
-    const result = await this.request(instrument, range, yahooInterval);
+    // Yahoo's range=1d for daily bars returns only the current/partial session.
+    // A week of daily bars guarantees the requested completed day is present
+    // even when another market has already opened (e.g. KRX at UTC midnight).
+    const effectiveRange = interval === "1d" && range === "1d" ? "7d" : range;
+    const result = await this.request(instrument, effectiveRange, yahooInterval);
     const timestamps = result.timestamp ?? [];
     const quote = result.indicators.quote[0];
     if (!quote) return [];

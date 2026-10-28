@@ -278,4 +278,52 @@ describe("Yahoo stock provider symbol resolution", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/chart/AAPL?");
   });
+
+  it("widens a one-day daily request so the completed session is included", async () => {
+    const timestamps = [
+      Date.parse("2026-10-14T00:00:00.000Z") / 1000,
+      Date.parse("2026-10-15T00:00:00.000Z") / 1000,
+      Date.parse("2026-10-16T00:00:00.000Z") / 1000,
+    ];
+    const { fetchImpl, calls } = routedFetch([
+      {
+        match: "000660.KS",
+        payload: {
+          chart: {
+            result: [
+              {
+                meta: { currency: "KRW", symbol: "000660.KS", instrumentType: "EQUITY" },
+                timestamp: timestamps,
+                indicators: {
+                  quote: [
+                    {
+                      open: [100, 101, 102],
+                      high: [100, 101, 102],
+                      low: [100, 101, 102],
+                      close: [100, 101, 102],
+                      volume: [10, 20, 30],
+                    },
+                  ],
+                },
+              },
+            ],
+            error: null,
+          },
+        },
+      },
+    ]);
+    const provider = new YahooStockProvider("https://query1.finance.yahoo.com", fetchImpl);
+
+    const quotes = await provider.getHistoricalQuotes(
+      stockInstrument(),
+      new Date("2026-10-15T00:00:00.000Z"),
+      new Date("2026-10-15T23:59:59.999Z"),
+      "1d",
+    );
+
+    expect(calls[0]).toContain("range=7d");
+    expect(quotes.map((quote) => quote.timestamp.toISOString())).toEqual([
+      "2026-10-15T00:00:00.000Z",
+    ]);
+  });
 });

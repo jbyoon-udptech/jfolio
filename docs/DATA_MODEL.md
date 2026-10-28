@@ -55,6 +55,9 @@ MongoDB native driver 사용. 컬렉션 정의는
   (`600` → `10m`, `90` → `90s`). 과거 백필은 공급자 단위
   (`tick | 10s | 1m | 5m | 1h | 1d`)를 사용합니다.
 - 논리 중복 키: `(instrumentId, providerId, interval, timestamp)`
+- `1d` 일봉은 자산 생성 백필과 별도로, 스케줄러가 UTC 자정과 기동 시점에
+  마지막 `1d` 다음 UTC 날짜부터 직전 UTC 완료일까지 증분 생성합니다. 진행
+  중인 당일 일봉은 저장하지 않으며, 중복 키 덕분에 재실행해도 안전합니다.
 - `latest_quotes` 는 종목별 물질화 뷰입니다. 수집 시 매 관측마다 갱신되며(동일
   시각 중복이면 `receivedAt` 만 갱신), 저장된 `timestamp` 보다 오래된 시세는
   반영하지 않아 최신값이 뒤로 가지 않습니다. 목록/상세 API가 `latestQuote` 로
