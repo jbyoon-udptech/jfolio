@@ -9,12 +9,12 @@ export function PageHeading({
   subtitle,
 }: {
   title: ReactNode;
-  subtitle: ReactNode;
+  subtitle?: ReactNode;
 }) {
   return (
     <div className="page-header-heading">
       <h1 className="page-title page-title-visually-hidden">{title}</h1>
-      <p className="page-sub">{subtitle}</p>
+      {subtitle ? <p className="page-sub">{subtitle}</p> : null}
     </div>
   );
 }

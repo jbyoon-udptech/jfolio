@@ -2,6 +2,7 @@ import { TIME_ZONE } from "@/lib/format";
 
 export const PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"] as const;
 export type Period = (typeof PERIODS)[number];
+export const DEFAULT_PERIOD: Period = "3M";
 
 const DAY = 86_400_000;
 
@@ -68,5 +69,7 @@ export function periodRange(
 }
 
 export function normalizePeriod(value: string | undefined): Period {
-  return (PERIODS as readonly string[]).includes(value ?? "") ? (value as Period) : "1M";
+  return (PERIODS as readonly string[]).includes(value ?? "")
+    ? (value as Period)
+    : DEFAULT_PERIOD;
 }

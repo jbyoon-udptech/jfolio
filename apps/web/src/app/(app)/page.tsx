@@ -11,9 +11,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
 import {
+  EMPTY,
+  UNAVAILABLE,
   formatCurrency,
   formatDateTime,
   formatPercent,
+  formatPrice,
   formatSignedCurrency,
 } from "@/lib/format";
 import { normalizePeriod, periodRange, PERIODS } from "@/lib/period";
@@ -97,10 +100,10 @@ export default async function DashboardPage({
         }
         actions={<StatusBadge status={dashboard.dataStatus} />}
         title={selection.isAll ? "종합 대시보드" : "전체 자산 대시보드"}
+        baseCurrency={currency}
+        referenceTime={dashboard.asOf}
         subtitle={
-          selection.isAll
-            ? `종합 대시보드 · 모든 포트폴리오 통합 · 기준 통화 ${currency} · 기준 시각 ${formatDateTime(dashboard.asOf)}`
-            : `기준 통화 ${currency} · 기준 시각 ${formatDateTime(dashboard.asOf)}`
+          selection.isAll ? "종합 대시보드 · 모든 포트폴리오 통합" : undefined
         }
       />
 
@@ -203,15 +206,18 @@ export default async function DashboardPage({
           {dashboard.topHoldings.length === 0 ? (
             <div className="empty">보유 종목이 없습니다.</div>
           ) : (
-            <table>
+            <table className="holdings-table">
               <thead>
                 <tr>
                   <th>종목</th>
-                  <th className="num">평가금액</th>
-                  <th className="num" title="오늘자 전일대비 등락률">
-                    전일대비
+                  <th className="num">
+                    <span className="th-main">평가금액</span>
+                    <span className="th-sub">현재가</span>
                   </th>
-                  <th className="num">수익률</th>
+                  <th className="num">
+                    <span className="th-main">수익율</span>
+                    <span className="th-sub">전일대비</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -219,20 +225,25 @@ export default async function DashboardPage({
                   <tr key={holding.instrumentId}>
                     <td>
                       <Link href={`/assets/${holding.instrumentId}`}>{holding.name}</Link>
-                      <div className="muted" style={{ fontSize: 11 }}>
-                        {holding.symbol}
-                      </div>
+                      <div className="cell-sub muted">{holding.symbol}</div>
                     </td>
                     <td className="num">
                       {holding.marketValueBase === null
-                        ? "평가 불가"
+                        ? UNAVAILABLE
                         : formatCurrency(holding.marketValueBase, currency)}
+                      <div className="cell-sub muted">
+                        {holding.price === null
+                          ? EMPTY
+                          : formatPrice(holding.price, holding.priceCurrency)}
+                      </div>
                     </td>
-                    <td className={`num ${changeClass(holding.dailyChangeRate)}`}>
-                      {formatPercent(holding.dailyChangeRate)}
-                    </td>
-                    <td className={`num ${changeClass(holding.unrealizedPnL)}`}>
+                    <td className={`num ${changeClass(holding.unrealizedReturn)}`}>
                       {formatPercent(holding.unrealizedReturn)}
+                      <div
+                        className={`cell-sub ${changeClass(holding.dailyChangeRate)}`}
+                      >
+                        {formatPercent(holding.dailyChangeRate)}
+                      </div>
                     </td>
                   </tr>
                 ))}

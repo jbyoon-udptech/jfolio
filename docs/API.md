@@ -360,7 +360,25 @@ DIVIDEND | INTEREST | FEE | SPLIT | ADJUSTMENT`. `currency` 는 선택이며
 | GET | `/api/v1/system/health` | 시스템 상태 (인증 예외) |
 | GET | `/api/v1/system/data-status` | 수집/데이터 최신성 상태 |
 | GET | `/api/v1/system/providers` | 공급자 상태 목록 |
+| GET | `/api/v1/system/fx-rate` | 기준 통화 환율(예: USD→KRW) 최신값 |
 | POST | `/api/v1/system/collection/run` | 수동 수집 실행 (인증 필요) |
+
+`GET /api/v1/system/fx-rate` 는 모든 페이지 헤더 아래에 표시하는 기준 환율을
+반환합니다. `baseCurrency`(기본값: 서버 `BASE_CURRENCY`, 보통 `KRW`)와
+`referenceCurrency`(기본값: `USD`)를 쿼리로 지정할 수 있으며, 저장된 FX
+시세만 사용하고 공급자를 직접 호출하지 않습니다. 직접 환율이 없으면 역방향
+환율의 역수를 사용합니다. 저장된 환율이 없으면 `rate` 와 `timestamp` 는
+`null` 입니다.
+
+```json
+{
+  "baseCurrency": "KRW",
+  "referenceCurrency": "USD",
+  "rate": 1327,
+  "timestamp": "2026-10-28T01:27:52.000Z",
+  "providerId": "frankfurter"
+}
+```
 
 수동 수집 요청(예):
 

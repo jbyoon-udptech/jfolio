@@ -3,7 +3,14 @@
 import { useState } from "react";
 import type { PortfolioTrendSeries } from "@/lib/dashboard";
 import type { HistoryPoint } from "@/lib/types";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
+import { findSeriesChartExtremes } from "@/lib/chart-annotations";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatMonthDay,
+  formatPercent,
+} from "@/lib/format";
 
 const WIDTH = 800;
 const PAD = 10;
@@ -99,6 +106,23 @@ export function PortfolioTrendChart({
       },
     ];
   }).flat();
+
+  const annotations = findSeriesChartExtremes(series).map((annotation) => {
+    const x = PAD + annotation.index * stepX;
+    const y = valueToY(annotation.value);
+    const horizontal = x < 110 ? "0" : x > WIDTH - 110 ? "-100%" : "-50%";
+    const vertical =
+      annotation.kind === "max" ? "10px" : "calc(-100% - 10px)";
+    return {
+      ...annotation,
+      x,
+      y,
+      transform: `translate(${horizontal}, ${vertical})`,
+      tone: changeClass(annotation.changeRate),
+      color: seriesColor(annotation.seriesIndex),
+      label: series[annotation.seriesIndex]?.label ?? "",
+    };
+  });
 
   const segmentsBySeries = series.map((item) => {
     const segments: Array<Array<{ x: number; y: number }>> = [];
@@ -264,6 +288,17 @@ export function PortfolioTrendChart({
                   ),
                 ),
               )}
+              {annotations.map((annotation) => (
+                <circle
+                  key={`extreme-${annotation.seriesIndex}-${annotation.kind}`}
+                  cx={annotation.x}
+                  cy={annotation.y}
+                  r={3.5}
+                  fill={annotation.color}
+                  stroke="var(--panel)"
+                  strokeWidth={2}
+                />
+              ))}
               {activeIndex !== null
                 ? series.map((item, index) => {
                     const value = item.points[activeIndex]?.totalAssetValue;
@@ -288,6 +323,29 @@ export function PortfolioTrendChart({
                   })
                 : null}
             </svg>
+            {annotations.map((annotation) => (
+              <div
+                key={`extreme-label-${annotation.seriesIndex}-${annotation.kind}`}
+                className="chart-annotation"
+                style={{
+                  left: `${(annotation.x / WIDTH) * 100}%`,
+                  top: annotation.y,
+                  transform: annotation.transform,
+                }}
+                role="note"
+                aria-label={`${annotation.label} ${annotation.kind === "max" ? "최대" : "최소"} ${formatMonthDay(annotation.asOf)} ${formatCurrency(annotation.value, currency)} ${formatPercent(annotation.changeRate)}`}
+              >
+                <span
+                  className="chart-annotation-swatch"
+                  style={{ background: annotation.color }}
+                  aria-hidden="true"
+                />
+                <span>{formatMonthDay(annotation.asOf)}</span>
+                <span className={annotation.tone}>
+                  {formatPercent(annotation.changeRate)}
+                </span>
+              </div>
+            ))}
             {active ? (
               <div
                 className="chart-tooltip chart-tooltip-wide"
@@ -330,4 +388,11 @@ export function PortfolioTrendChart({
       </div>
     </div>
   );
+}
+
+function changeClass(value: number | null): string {
+  if (value === null) return "";
+  if (value > 0) return "up";
+  if (value < 0) return "down";
+  return "";
 }

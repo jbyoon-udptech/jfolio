@@ -10,6 +10,7 @@ import type {
   PortfolioHistorySeries,
   PortfolioSnapshot,
   ProviderStatusView,
+  ReferenceFxRate,
   SignalEvent,
   SignalRule,
   SystemDataStatus,
@@ -199,6 +200,9 @@ export const api = {
 
   dataStatus: () => request<SystemDataStatus>("/system/data-status"),
   providers: () => request<ListResponse<ProviderStatusView>>("/system/providers"),
+  referenceFxRate: (
+    params: { baseCurrency?: string; referenceCurrency?: string } = {},
+  ) => request<ReferenceFxRate>(`/system/fx-rate${query(params)}`),
 };
 
 /** Server-only write operations, used by the Next.js route handlers. */

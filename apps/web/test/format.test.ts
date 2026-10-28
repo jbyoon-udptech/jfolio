@@ -7,6 +7,7 @@ import {
   formatDate,
   formatDateTime,
   formatDuration,
+  formatMonthDay,
   formatNumber,
   formatPercent,
   formatPrice,
@@ -15,7 +16,7 @@ import {
   formatWeight,
   toLocalDateTimeInput,
 } from "@/lib/format";
-import { normalizePeriod, periodRange } from "@/lib/period";
+import { DEFAULT_PERIOD, normalizePeriod, periodRange } from "@/lib/period";
 
 /**
  * UI-006: missing data must render as an explicit placeholder, never as 0.
@@ -81,6 +82,8 @@ describe("UI-006 formatting", () => {
       formatDateTime("2026-10-16T12:00:00.000Z", { seconds: false }),
     ).toBe("2026-10-16 21:00");
     expect(formatDate("2026-10-16T12:00:00.000Z")).toBe("2026-10-16");
+    expect(formatMonthDay("2026-10-03T12:00:00.000Z")).toBe("10월 3일");
+    expect(formatMonthDay(null)).toBe(EMPTY);
     expect(formatDateTime(null)).toBe(EMPTY);
     expect(formatDateTime("not-a-date")).toBe(EMPTY);
   });
@@ -130,11 +133,15 @@ describe("collection cadence", () => {
 });
 
 describe("period helpers (UI-001)", () => {
+  it("defaults the dashboard to the last three months", () => {
+    expect(DEFAULT_PERIOD).toBe("3M");
+    expect(normalizePeriod(undefined)).toBe("3M");
+  });
+
   it("normalises unknown periods to the default", () => {
     expect(normalizePeriod("1Y")).toBe("1Y");
     expect(normalizePeriod("YTD")).toBe("YTD");
-    expect(normalizePeriod("bogus")).toBe("1M");
-    expect(normalizePeriod(undefined)).toBe("1M");
+    expect(normalizePeriod("bogus")).toBe("3M");
   });
 
   it("maps 1D to an hourly window and longer periods to daily", () => {

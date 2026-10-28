@@ -240,6 +240,15 @@ export interface SystemDataStatus {
   }>;
 }
 
+/** Latest stored rate expressed as 1 reference currency in the base currency. */
+export interface ReferenceFxRate {
+  baseCurrency: string;
+  referenceCurrency: string;
+  rate: number | null;
+  timestamp: string | null;
+  providerId: string | null;
+}
+
 export interface ProviderStatusView {
   providerId: string;
   displayName: string;

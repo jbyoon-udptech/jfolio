@@ -123,6 +123,17 @@ export function formatDate(value: string | Date | null | undefined): string {
   }).format(date);
 }
 
+/** Compact local date for chart annotations, e.g. "10월 3일". */
+export function formatMonthDay(value: string | Date | null | undefined): string {
+  const date = toDate(value);
+  if (!date) return EMPTY;
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
 /**
  * Format an instant as a `datetime-local` input value (`YYYY-MM-DDTHH:mm`) in
  * the browser's local time. `new Date(value)` round-trips to the same instant,

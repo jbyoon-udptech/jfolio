@@ -1,6 +1,7 @@
 import type { CollectionJob, DataStatus, ProviderState } from "@jfolio/shared";
 import type { AppConfig } from "../config";
 import { collectionScheduleFor } from "../domain/intervals";
+import { divide, isPositiveFinite } from "../domain/money";
 import type { MarketDataProvider } from "../providers/market-data.provider";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Repositories } from "../repositories/types";
@@ -30,6 +31,15 @@ export interface SystemDataStatus {
   latestCollectionAt: Date | null;
   providers: ProviderState[];
   recentJobs: CollectionJob[];
+}
+
+/** Latest stored rate expressed as 1 `referenceCurrency` in `baseCurrency`. */
+export interface ReferenceFxRate {
+  baseCurrency: string;
+  referenceCurrency: string;
+  rate: number | null;
+  timestamp: Date | null;
+  providerId: string | null;
 }
 
 /**
@@ -72,6 +82,53 @@ export class SystemService {
       providers,
       recentJobs,
     };
+  }
+
+  /**
+   * Latest reference rate for the global header, e.g. USD -> KRW. Reads the
+   * stored FX collection only; it never triggers an external provider call.
+   */
+  async getReferenceFxRate(
+    baseCurrency: string,
+    referenceCurrency = "USD",
+  ): Promise<ReferenceFxRate> {
+    const empty: ReferenceFxRate = {
+      baseCurrency,
+      referenceCurrency,
+      rate: null,
+      timestamp: null,
+      providerId: null,
+    };
+    if (baseCurrency === referenceCurrency) {
+      return { ...empty, rate: 1 };
+    }
+
+    const direct = await this.repos.fxRates.getLatest(referenceCurrency, baseCurrency);
+    if (direct && isPositiveFinite(direct.rate)) {
+      return {
+        baseCurrency,
+        referenceCurrency,
+        rate: direct.rate,
+        timestamp: direct.timestamp,
+        providerId: direct.providerId,
+      };
+    }
+
+    const inverse = await this.repos.fxRates.getLatest(baseCurrency, referenceCurrency);
+    if (inverse && isPositiveFinite(inverse.rate)) {
+      const rate = divide(1, inverse.rate);
+      if (rate !== null) {
+        return {
+          baseCurrency,
+          referenceCurrency,
+          rate,
+          timestamp: inverse.timestamp,
+          providerId: inverse.providerId,
+        };
+      }
+    }
+
+    return empty;
   }
 
   async getProviders(): Promise<ProviderStatusView[]> {

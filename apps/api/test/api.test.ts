@@ -1199,6 +1199,44 @@ describe("8.2 dashboard", () => {
 });
 
 describe("8.7 system", () => {
+  it("returns the latest reference FX rate for the global header", async () => {
+    const { container } = createTestContext();
+    await container.repos.fxRates.upsertRate({
+      base: "USD",
+      quote: "KRW",
+      rate: 1327,
+      timestamp: FIXED_NOW,
+      receivedAt: FIXED_NOW,
+      providerId: "test",
+    });
+
+    const res = await request(appFor(container)).get(`${BASE}/system/fx-rate`);
+    expect(res.status).toBe(200);
+    expect(res.body.baseCurrency).toBe("KRW");
+    expect(res.body.referenceCurrency).toBe("USD");
+    expect(res.body.rate).toBe(1327);
+    expect(res.body.providerId).toBe("test");
+    expect(new Date(res.body.timestamp).toISOString()).toBe(FIXED_NOW.toISOString());
+  });
+
+  it("inverts a stored rate when only the reverse pair exists", async () => {
+    const { container } = createTestContext();
+    await container.repos.fxRates.upsertRate({
+      base: "KRW",
+      quote: "USD",
+      rate: 0.00075,
+      timestamp: FIXED_NOW,
+      receivedAt: FIXED_NOW,
+      providerId: "test",
+    });
+
+    const res = await request(appFor(container)).get(
+      `${BASE}/system/fx-rate?baseCurrency=KRW&referenceCurrency=USD`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.rate).toBeCloseTo(1 / 0.00075, 8);
+  });
+
   it("exposes provider metadata and data status", async () => {
     const { container } = createTestContext();
     const app = appFor(container);

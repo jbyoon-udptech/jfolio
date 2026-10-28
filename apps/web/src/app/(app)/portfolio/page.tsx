@@ -5,7 +5,7 @@ import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Option } from "@/components/TransactionForm";
 import { api, safe } from "@/lib/api";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { resolvePortfolioSelection } from "@/lib/portfolio-selection";
 import { readSelectedPortfolioCookie } from "@/lib/server-portfolio";
 import { redirect } from "next/navigation";
@@ -72,7 +72,8 @@ export default async function PortfolioPage({
           </>
         }
         title="보유 자산"
-        subtitle={`${holdings.baseCurrency} 기준 · ${formatDateTime(holdings.asOf)}`}
+        baseCurrency={holdings.baseCurrency}
+        referenceTime={holdings.asOf}
       />
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>

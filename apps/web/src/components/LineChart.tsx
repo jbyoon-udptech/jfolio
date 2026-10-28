@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import type { HistoryPoint } from "@/lib/types";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
+import { findChartExtremeAnnotations } from "@/lib/chart-annotations";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatMonthDay,
+  formatPercent,
+} from "@/lib/format";
 
 const WIDTH = 800;
 const PAD = 10;
@@ -75,6 +82,21 @@ export function LineChart({
       },
     ];
   }).flat();
+
+  const annotations = findChartExtremeAnnotations(points).map((annotation) => {
+    const x = PAD + annotation.index * stepX;
+    const y = valueToY(annotation.value);
+    const horizontal = x < 110 ? "0" : x > WIDTH - 110 ? "-100%" : "-50%";
+    const vertical =
+      annotation.kind === "max" ? "10px" : "calc(-100% - 10px)";
+    return {
+      ...annotation,
+      x,
+      y,
+      transform: `translate(${horizontal}, ${vertical})`,
+      tone: changeClass(annotation.changeRate),
+    };
+  });
 
   const segments: Array<Array<{ x: number; y: number }>> = [];
   let current: Array<{ x: number; y: number }> = [];
@@ -200,6 +222,17 @@ export function LineChart({
                 />
               ),
             )}
+            {annotations.map((annotation) => (
+              <circle
+                key={`extreme-${annotation.kind}`}
+                cx={annotation.x}
+                cy={annotation.y}
+                r={3.5}
+                fill={annotation.kind === "max" ? "var(--warn)" : "var(--chart-6)"}
+                stroke="var(--panel)"
+                strokeWidth={2}
+              />
+            ))}
             {active ? (
               <circle
                 cx={active.x}
@@ -211,6 +244,24 @@ export function LineChart({
               />
             ) : null}
           </svg>
+          {annotations.map((annotation) => (
+            <div
+              key={`extreme-label-${annotation.kind}`}
+              className="chart-annotation"
+              style={{
+                left: `${(annotation.x / WIDTH) * 100}%`,
+                top: annotation.y,
+                transform: annotation.transform,
+              }}
+              role="note"
+              aria-label={`${annotation.kind === "max" ? "최대" : "최소"} ${formatMonthDay(annotation.asOf)} ${formatCurrency(annotation.value, currency)} ${formatPercent(annotation.changeRate)}`}
+            >
+              <span>{formatMonthDay(annotation.asOf)}</span>
+              <span className={annotation.tone}>
+                {formatPercent(annotation.changeRate)}
+              </span>
+            </div>
+          ))}
           {active ? (
             <div
               className="chart-tooltip"
@@ -238,4 +289,11 @@ export function LineChart({
       </div>
     </div>
   );
+}
+
+function changeClass(value: number | null): string {
+  if (value === null) return "";
+  if (value > 0) return "up";
+  if (value < 0) return "down";
+  return "";
 }
