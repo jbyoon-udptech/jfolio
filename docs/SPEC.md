@@ -5,8 +5,8 @@
 프로젝트명: jFolio
 문서 유형: Product Requirements Document (PRD) + Software Requirements Specification (SRS)
 대상 구현 환경: AI Coding Agent, Node.js, TypeScript, Next.js
-문서 버전: 1.0
-기준일: 2026-10-16
+문서 버전: 1.1
+기준일: 2026-10-28
 
 1. 프로젝트 개요
 
@@ -103,9 +103,10 @@ MongoDB는 사용자의 기존 Node.js·TypeScript 개발 환경과도 잘 맞�
     ┌─────────────────────────┐
     │      Next.js Web        │
     │                         │
-    │ Dashboard / Portfolio   │
-    │ Asset Detail / Charts   │
-    │ Transactions / Settings │
+    │ 대시보드 / 보유 자산     │
+    │ 과거 자산 / 거래 내역    │
+    │ 자산 목록 / 시그널       │
+    │ 시장 데이터 / 포트폴리오 │
     └────────────┬────────────┘
                  │
             REST API
@@ -745,30 +746,23 @@ FR-064: 시그널 이벤트 저장
 
 Next.js 기반 웹 UI는 다음 메뉴를 제공한다.
 jFolio
-├── Dashboard
-├── Portfolio
-│ ├── Overview
-│ ├── Holdings
-│ ├── Asset Allocation
-│ └── Historical Performance
-├── Assets
-│ ├── Watchlist
-│ ├── Stocks
-│ ├── Crypto
-│ └── FX
-├── Transactions
-├── Signals
-│ ├── Active Rules
-│ └── Signal History
-├── Market Data
-│ ├── Quotes
-│ └── Collection Status
-└── Settings
-├── Portfolio Settings
-├── Data Providers
-└── System Settings
+├── 대시보드
+├── 보유 자산
+├── 과거 자산
+├── 거래 내역
+├── 자산 목록
+├── 포트폴리오
+├── 시그널
+└── 시장 데이터
 
-초기 버전에서는 핵심 화면부터 구현하며, 일부 메뉴는 MVP 이후에 추가할 수 있다.
+대시보드·보유 자산·과거 자산 화면은 상단의 포트폴리오 선택기를 공유한다.
+포트폴리오 선택기는 숨김 포트폴리오를 제외한 목록을 보여 주며, 대시보드에서는
+`All`을 선택해 모든 표시 포트폴리오를 하나의 기준 통화로 합산할 수 있다.
+
+로그인·로그아웃은 별도 설정 메뉴가 아니라 사이드바 하단의 계정 영역에서
+수행한다. 공급자 선택은 환경변수로, 수집 상태 확인과 수동 수집은
+`/market-data` 화면과 `/api/v1/system/*` API로, 백업·복원과 계정 생성은
+CLI로 제공한다.
 7.2. Dashboard
 
 UI-001: 전체 자산 대시보드
@@ -791,7 +785,9 @@ UI-001: 전체 자산 대시보드
 
 권장 화면 구성:
 ┌──────────────────────────────────────────────────────┐
-│ jFolio                         기준 통화: KRW         │
+│ jFolio      [포트폴리오 선택 ▾]      대시보드   [NORMAL] │
+├──────────────────────────────────────────────────────┤
+│ 기준 통화 KRW(₩1,328/USD) 기준 시각 2026-10-28 11:17:33 │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
 │  Total Asset Value         Daily Change              │
@@ -802,12 +798,13 @@ UI-001: 전체 자산 대시보드
 │  Portfolio Performance                               │
 │  [1D] [1W] [1M] [3M] [6M] [YTD] [1Y] [ALL]           │
 │                                                      │
-│  [자산 평가금액 추이 차트]                                │
+│  [자산 평가금액 추이 차트 + 최고/최저 주석]                 │
 │                                                      │
 ├──────────────────────────┬───────────────────────────┤
 │ Asset Allocation         │ Top Holdings              │
 │                          │                           │
-│ [자산 비중 차트]            │ 종목 / 평가금액 / 수익률      │
+│ [자산 비중 차트]            │ 종목 / 평가금액(현재가) /     │
+│                          │ 수익율(전일대비)             │
 │                          │                           │
 ├──────────────────────────┴───────────────────────────┤
 │ Recent Signals                                       │
@@ -817,26 +814,34 @@ UI-001: 전체 자산 대시보드
 └──────────────────────────────────────────────────────┘
 
 위 금액은 화면 구성 예시이며 실제 사용자 자산을 의미하지 않는다.
+
+구현 기준 상세:
+
+    페이지 제목은 접근성용으로만 유지하고, 화면에는 `기준 통화 {baseCurrency}({rate}/{referenceCurrency}) 기준 시각 {referenceTime}` 형식의 한 줄을 표시한다. 환율은 저장된 최신 FX 데이터(`GET /api/v1/system/fx-rate`)를 사용하고, 기준 시각은 해당 페이지 데이터의 `asOf`를 사용한다. FX 시세 시각을 페이지 기준 시각으로 오인해 표시하지 않는다. 환율이 없으면 `기준 통화 {baseCurrency}`만 표시하고 0으로 대체하지 않는다.
+    포트폴리오 선택기가 단일 포트폴리오와 `All`을 제공한다. `All`은 숨김 포트폴리오를 제외한 모든 포트폴리오를 기본 포트폴리오의 기준 통화로 합산하며, `포트폴리오별 평가금액` 표와 다중 시계열 차트를 추가로 표시한다.
+    차트 기간은 `1D`, `1W`, `1M`, `3M`, `6M`, `YTD`, `1Y`, `ALL`이며 기본 선택은 `3M`이다.
+    차트에는 기간 내 최고점과 최저점을 표시한다. 주석의 화면 텍스트는 날짜(`MM-DD`)와 최신값 대비 변동률만 표시하고 `최대`/`최소` 문구는 노출하지 않는다. 변동률은 `(최신값 - 극값) / 극값 × 100`으로 계산하며, 접근성 레이블에는 최대/최소 의미를 유지한다.
+    누락된 평가 시점은 보간하지 않고 선을 끊어 표시한다.
+    보유 종목 표는 `종목`, `평가금액/현재가`, `수익율/전일대비` 3개 컬럼으로 구성한다. 평가금액은 기준 통화, 현재가는 자산의 거래 통화로 표시한다. 현금과 평가 불가 종목은 이 표에서 제외하며, 현금 잔고는 보유 자산 화면의 현금 잔고 카드에서 확인하고 평가 불가 종목 수는 `unavailableCount`로 집계한다. 평가 불가 값을 0원으로 대체하지 않는다.
 7.3. Portfolio 화면
 
 UI-002: 보유 자산 목록
 
-다음 컬럼을 제공한다.
-컬럼 설명
-Asset 종목명
-Symbol 종목 코드
-Asset Type 자산 유형
-Quantity 보유 수량
-Current Price 현재 가격
-Price Change 가격 변동률
-Market Value 평가금액
-Cost Basis 매입 원가
-Unrealized P&L 미실현 손익
-Return 수익률
-Weight 전체 자산 대비 비중
-Updated At 시세 기준 시각
+다음 2단 컬럼을 제공한다. 각 컬럼은 주 값을 첫 줄에, 보조 값을 둘째 줄에
+표시해 가로 폭을 줄인다.
+
+    자산: 종목명, 보조 줄에 코드와 자산 유형
+    현재가(수량): 자산 거래 통화 기준 현재가와 보유 수량, 보조 줄에 매입평균가(기준 통화)
+    전일대비: 최신가와 직전 일봉 종가의 등락률. 헤더 둘째 줄은 `등락률`이며 별도 보조 값은 없다.
+    평가금액: 기준 통화 평가금액, 보조 줄에 매입 원가(기준 통화)
+    미실현 손익: 미실현 손익(기준 통화), 보조 줄에 수익률
+    비중: 전체 자산 대비 비중
+    시세 기준: 시세 기준 시각, 보조 줄에 데이터 상태 배지
 
 정렬과 검색 기능을 제공하며, 종목을 선택하면 상세 화면으로 이동한다.
+현금은 별도 현금 잔고 카드에서 표시하고 이 표에서는 제외한다. 평가금액과
+매입 원가는 기준 통화로, 현재가는 자산의 거래 통화로 표시한다. 값이 없으면
+0으로 대체하지 않고 `평가 불가` 또는 `—`로 표시한다.
 7.4. Asset Detail 화면
 
 UI-003: 개별 자산 상세
@@ -916,19 +921,28 @@ UI-006: 공통 상태 표시
     가격 및 수량: 적절한 정밀도를 유지한다.
     오류 응답: 일관된 공통 형식을 사용한다.
 
-API는 사용자 데이터에 접근할 때 인증과 권한 검사를 수행해야 한다.
+API는 사용자 데이터에 접근할 때 인증과 권한 검사를 수행한다. Phase 1은
+이메일/비밀번호 로그인과 서버 세션을 사용하며, 인증 라우트는 버전 경로 밖의
+`/api/auth`에 있다. 세션 인증을 사용하는 변경 요청은 double-submit CSRF
+(`jfolio.csrf` 쿠키 + `x-csrf-token` 헤더)를 요구한다. `API_AUTH_TOKEN` 서비스
+토큰으로 인증한 요청은 CSRF 검사를 생략한다. 오류 응답은
+`{ "error": { "code", "message", "details?" } }` 형식을 사용한다.
 8.2. Dashboard API
 
 GET /api/v1/dashboard
 
-전체 자산 현황을 조회한다.
+전체 자산 현황을 조회한다. `portfolioId`를 생략하면 사용자의 기본
+포트폴리오를 사용하고, 없으면 생성한다. `portfolioId=all`이면 숨김
+포트폴리오를 제외한 모든 포트폴리오를 기본 포트폴리오의 기준 통화로
+합산하고 `portfolios` 배열에 포트폴리오별 내역을 함께 반환한다.
 
 요청 예시:
-GET /api/v1/dashboard?baseCurrency=KRW
+GET /api/v1/dashboard?portfolioId=all&baseCurrency=KRW
 
 응답 예시:
 
 {
+"portfolioId": "all",
 "baseCurrency": "KRW",
 "asOf": "2026-10-16T05:00:00.000Z",
 "totalAssetValue": 350000000,
@@ -937,10 +951,32 @@ GET /api/v1/dashboard?baseCurrency=KRW
 "totalCostBasis": 320000000,
 "unrealizedPnL": 30000000,
 "unrealizedReturn": 9.375,
-"dataStatus": "NORMAL"
+"dataStatus": "NORMAL",
+"unavailableCount": 0,
+"allocationByAssetType": [],
+"allocationByCurrency": [],
+"topHoldings": [],
+"recentSignals": [],
+"portfolios": [],
+"lastDataUpdatedAt": "2026-10-16T05:00:00.000Z"
 }
 
 위 응답은 API 계약 예시이며 실제 계산 결과가 아니다.
+
+`dailyChange`와 `dailyChangeRate`는 현재 또는 비교 시점의 평가 상태가
+`UNAVAILABLE`이면 `null`이다. 0으로 대체하지 않는다. `topHoldings`는 현금과
+평가 불가 종목을 제외한 보유 종목을 평가금액 내림차순으로 반환하며, 외화 자산의
+`marketValueBase`는 기준 통화, `price`는 자산의 거래 통화로 제공한다.
+
+GET /api/v1/dashboard/history
+
+대시보드 차트용 평가금액 시계열을 조회한다. Query는 `portfolioId`,
+`baseCurrency`, `from`, `to`, `interval`(`hourly | daily`, 기본 `daily`),
+`includeSnapshots`(기본 `false`)이다.
+`portfolioId=all`이거나 생략하면 숨김 포트폴리오를 제외한 전체를 하나의 기준
+통화로 합산한다. 한 포트폴리오라도 해당 시점 평가가 불가하면 그 시점 값은
+`null`이며, UI는 누락 구간을 보간하지 않는다. `all` 응답에는 포트폴리오별
+`series: [{ portfolioId, name, items }]`가 추가된다.
 8.3. Asset API
 Method Endpoint 설명
 GET /api/v1/assets 자산 목록 조회
@@ -950,16 +986,25 @@ PATCH /api/v1/assets/:id 자산 정보 수정
 DELETE /api/v1/assets/:id 자산 비활성화 또는 삭제 정책 적용
 GET /api/v1/assets/:id/quotes 과거 시세 조회
 
-삭제 API는 과거 거래 및 스냅샷 참조를 보존하도록 구현한다. 사용 이력이 있는 자산은 물리 삭제 대신 비활성화하는 방식을 권장한다.
+목록과 상세 응답은 자산별 최신 시세를 `latestQuote`로 함께 반환한다(없으면
+`null`). 삭제 API는 과거 거래 및 스냅샷 참조를 보존하도록 물리 삭제 대신
+`isActive=false`로 비활성화하며, `PATCH { "isActive": true }`로 복원할 수 있다.
 8.4. Portfolio API
 Method Endpoint 설명
-GET /api/v1/portfolios 포트폴리오 목록
+GET /api/v1/portfolios 포트폴리오 목록 (기본: 숨김 제외, `includeHidden=true`로 포함)
 POST /api/v1/portfolios 포트폴리오 생성
 GET /api/v1/portfolios/:id 포트폴리오 상세
+PATCH /api/v1/portfolios/:id 이름·기준 통화·기본·숨김 수정
 GET /api/v1/portfolios/:id/holdings 보유 자산 조회
 GET /api/v1/portfolios/:id/valuation 현재 평가금액 조회
 GET /api/v1/portfolios/:id/history 과거 자산 현황 조회
 GET /api/v1/portfolios/:id/snapshots 스냅샷 조회
+POST /api/v1/portfolios/:id/snapshots 온디맨드 스냅샷 생성
+
+`isHidden=true`인 포트폴리오는 목록·선택·대시보드에서 기본적으로 제외하되
+데이터는 유지한다. 기본 포트폴리오는 숨길 수 없고, 숨김 포트폴리오를 기본으로
+지정하면 자동으로 다시 표시한다. `isDefault=true`로 지정하면 같은 사용자의 다른
+포트폴리오는 기본 지정이 해제된다. 빈 PATCH 본문은 `422`로 거부한다.
 8.5. Transaction API
 Method Endpoint 설명
 GET /api/v1/transactions 거래 이력 조회
@@ -977,18 +1022,44 @@ DELETE /api/v1/signals/rules/:id 규칙 비활성화
 GET /api/v1/signals/events 시그널 발생 이력
 8.7. System API
 Method Endpoint 설명
-GET /api/v1/system/health 시스템 상태
+GET /api/v1/system/health 시스템 상태 (인증 예외)
 GET /api/v1/system/data-status 수집 작업 상태
 GET /api/v1/system/providers 공급자 상태
-POST /api/v1/system/collection/run 권한이 있는 운영자의 수동 수집 실행
+GET /api/v1/system/fx-rate 기준 통화 환율 최신값 (`baseCurrency`, `referenceCurrency`)
+POST /api/v1/system/collection/run 인증된 사용자의 수동 수집 실행
 
-수동 수집 API는 인증 및 권한 검사를 적용하고, 요청 남용을 방지해야 한다.
+`GET /api/v1/system/fx-rate`는 모든 인증 페이지 헤더에 표시하는 기준 환율을
+반환한다. 기본값은 `baseCurrency=KRW`, `referenceCurrency=USD`이며, 저장된
+`fx_rates`의 최신값을 사용하고 외부 공급자를 직접 호출하지 않는다. 환율을
+찾지 못하면 `rate: null`을 반환하며 0으로 대체하지 않는다.
+
+수동 수집 API는 인증된 요청에만 허용하고, 호출 남용을 방지해야 한다.
+
+8.8. Authentication API
+
+인증 라우트는 `/api/v1` 밖의 `/api/auth`에 있으며, 웹은 동일 출처 프록시
+`/api/auth/*`를 통해 호출한다.
+
+Method Endpoint 설명
+GET /api/auth/csrf 현재 세션의 CSRF 토큰 반환
+GET /api/auth/me `{ authenticated, user }` 반환
+GET /api/auth/providers 사용 가능한 로그인 수단 반환
+POST /api/auth/login 이메일/비밀번호 로그인
+POST /api/auth/logout 세션 종료 및 쿠키 삭제
+
+회원가입·비밀번호 재설정은 제공하지 않으며, 계정은 관리자가
+`yarn create-user`(운영: `node apps/api/dist/cli/create-user.js`)로 생성한다.
+로그인 실패는 계정 존재 여부를 노출하지 않도록 동일한 메시지를 사용하고,
+IP와 이메일 조합 기준 rate limit을 적용한다. Google SSO는 Phase 2 예약이다.
 
 9. MongoDB 데이터 모델
 
 이 절은 MongoDB를 사용하는 경우의 권장 스키마다. 실제 컬렉션과 필드는 구현 과정에서 조정할 수 있지만, 데이터 간의 관계와 무결성 원칙은 유지해야 한다.
 9.1. 컬렉션 구성
 Collection 용도 보존 원칙
+users 내부 사용자 계정 계정 상태·감사 목적 보존
+user_identities 인증 수단(local/Google) 연결 사용자당 provider별 1개
+sessions 서버 측 로그인 세션 만료·로그아웃 시 삭제
 instruments 금융상품 마스터 사용 이력 보존
 market_quotes 시장 시세 시계열 보존 기간 및 집계 정책 적용
 latest_quotes 종목별 최신 시세 최신 상태 갱신
@@ -1001,18 +1072,23 @@ signal_rules 시그널 규칙 사용자 설정
 signal_events 시그널 발생 이력 중복 방지 및 이력 보존
 collection_jobs 수집 작업 상태 운영 상태 기록
 provider_states 공급자별 상태 장애 분석 및 복구
+
+`users`/`user_identities`/`sessions`는 Phase 1 로컬 로그인 구현에 포함된다.
+포트폴리오·거래 데이터는 현재 `DEFAULT_USER_ID` 아래에서 공유되며, 인증 계정
+도입과 사용자별 데이터 분리는 별도 단계다.
 9.2. instruments
 
 금융상품의 기본 정보를 저장한다.
 
 {
-"\_id": "instrument-id",
+"instrumentId": "instrument-id",
 "symbol": "AAPL",
 "name": "Apple Inc.",
 "assetType": "STOCK",
 "market": "NASDAQ",
 "currency": "USD",
 "isActive": true,
+"isWatchlist": false,
 "providers": [
 {
 "providerId": "provider-a",
@@ -1026,12 +1102,13 @@ provider_states 공급자별 상태 장애 분석 및 복구
 9.3. market_quotes
 
 {
-"\_id": "quote-id",
 "instrumentId": "instrument-id",
 "providerId": "provider-a",
 "interval": "1m",
 "timestamp": "2026-10-16T05:00:00.000Z",
 "receivedAt": "2026-10-16T05:00:01.000Z",
+"price": 250.8,
+"currency": "USD",
 "open": 250.1,
 "high": 251.0,
 "low": 249.8,
@@ -1049,10 +1126,18 @@ OHLCV 데이터는 가격의 의미를 명확히 구분한다.
     volume: 해당 구간의 거래량
 
 최신 시세를 저장하는 방식과 과거 시세를 저장하는 방식은 분리한다.
+`latest_quotes`는 종목별 물질화 뷰로, 수집 시 매 관측마다 갱신한다. 저장된
+`timestamp`보다 오래된 시세가 뒤늦게 들어와도 최신값을 덮어쓰지 않는다. 동일
+시각의 중복 관측은 원본 시세 행을 추가하지 않고 최신 뷰의 `receivedAt`을
+포함한 수집 메타데이터를 갱신한다.
+
+`1d` 일봉은 자산 생성 시 백필과 별도로 스케줄러가 UTC 자정과 기동 시점에
+마지막 `1d` 다음 UTC 날짜부터 직전 UTC 완료일까지 증분 생성한다. 진행 중인
+당일 일봉은 저장하지 않고, 논리 중복 키로 재실행을 멱등하게 만든다.
 9.4. transactions
 
 {
-"\_id": "transaction-id",
+"transactionId": "transaction-id",
 "portfolioId": "portfolio-id",
 "instrumentId": "instrument-id",
 "type": "BUY",
@@ -1063,7 +1148,8 @@ OHLCV 데이터는 가격의 의미를 명확히 구분한다.
 "fee": 1.5,
 "externalReference": null,
 "memo": "Initial purchase",
-"createdAt": "2026-10-10T02:01:00.000Z"
+"createdAt": "2026-10-10T02:01:00.000Z",
+"updatedAt": "2026-10-10T02:01:00.000Z"
 }
 
 금액은 거래 통화로 기록한다. 거래 수수료 역시 통화를 명시해야 한다.
@@ -1071,18 +1157,34 @@ OHLCV 데이터는 가격의 의미를 명확히 구분한다.
 입출금과 거래를 정확히 구분하고, 내부 계좌 간 자산 이동을 매수·매도로 잘못 계산하지 않도록 한다.
 9.5. 인덱스 설계
 
-초기 필수 인덱스는 다음과 같다.
-Collection Index 목적
-instruments { symbol: 1, market: 1, currency: 1 } 상품 검색
+현재 구현된 주요 인덱스는 다음과 같다. 대부분은 `ensureIndexes()`가 기동 시
+best-effort로 생성하고, `sessions` TTL 인덱스는 세션 스토어가 관리한다.
+Collection Index 옵션·목적
+users { email: 1 } Unique
+user_identities { provider: 1, providerUserId: 1 } Unique
+user_identities { userId: 1, provider: 1 } Unique
+sessions TTL `SESSION_MAX_AGE_MS` 기준
+instruments { symbol: 1, market: 1, currency: 1 } Unique 자연키
+instruments { assetType: 1, isActive: 1 } 자산군/활성 조회
+market_quotes { instrumentId: 1, providerId: 1, interval: 1, timestamp: 1 } Unique 논리 중복 방지
 market_quotes { instrumentId: 1, interval: 1, timestamp: -1 } 과거 시세 조회
-market_quotes { instrumentId: 1, providerId: 1, interval: 1, timestamp: 1 } 데이터 중복 방지
 latest_quotes { instrumentId: 1 } Unique 종목별 최신 시세
+fx_rates { base: 1, quote: 1, timestamp: 1 } Unique 논리 중복 방지
+fx_rates { base: 1, quote: 1, timestamp: -1 } 최신 환율 조회
+portfolios { userId: 1, isDefault: 1 } 사용자별 기본 조회
 transactions { portfolioId: 1, timestamp: 1 } 거래 이력 조회
+transactions { instrumentId: 1, timestamp: 1 } 종목별 거래 조회
+positions { portfolioId: 1, instrumentId: 1 } Unique 포지션
 portfolio_snapshots { portfolioId: 1, snapshotType: 1, asOf: 1 } Unique 스냅샷 중복 방지
 signal_rules { portfolioId: 1, isEnabled: 1 } 활성 규칙 조회
+signal_rules { instrumentId: 1, isEnabled: 1 } 종목별 활성 규칙 조회
 signal_events { ruleId: 1, deduplicationKey: 1 } Unique 시그널 중복 방지
+signal_events { instrumentId: 1, triggeredAt: -1 } 종목별 이력 조회
+collection_jobs { providerId: 1, startedAt: -1 } 수집 이력 조회
+provider_states { providerId: 1 } Unique 공급자 상태
 
-인덱스의 고유성 및 키 구성은 실제 컬렉션 설계에 맞게 검증한다. 사용자별 데이터 분리가 필요한 컬렉션에는 userId를 포함해야 한다.
+인덱스의 고유성 및 키 구성은 실제 컬렉션 설계에 맞게 검증한다. 사용자별 데이터
+분리가 필요한 컬렉션에는 userId를 포함해야 한다.
 
 주의: MongoDB는 컬렉션 간 관계를 자동으로 보장하지 않는다. 참조 대상의 존재 여부, 거래 이력의 일관성, 중복 방지 및 동시성 처리를 애플리케이션에서 구현해야 한다.
 
@@ -1182,55 +1284,66 @@ NFR-006: 테스트 환경
 
 11. 프로젝트 디렉터리 구조
 
-Backend와 Frontend를 분리하되, 하나의 저장소에서 관리하는 모노레포 구성을 권장한다.
+Backend와 Frontend를 분리하되, 하나의 저장소에서 관리하는 모노레포로
+구성되어 있다.
 jFolio/
 ├── apps/
-│ ├── api/
-│ │ ├── src/
-│ │ │ ├── api/
-│ │ │ ├── providers/
-│ │ │ ├── services/
-│ │ │ ├── repositories/
-│ │ │ ├── models/
-│ │ │ ├── workers/
-│ │ │ ├── scheduler/
-│ │ │ ├── config/
-│ │ │ └── index.ts
-│ │ ├── test/
-│ │ └── package.json
-│ │
-│ └── web/
-│ ├── src/
-│ │ ├── app/
-│ │ ├── components/
-│ │ ├── features/
-│ │ ├── hooks/
-│ │ ├── lib/
-│ │ └── types/
-│ ├── public/
-│ └── package.json
-│
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── api/
+│   │   │   │   └── routes/
+│   │   │   ├── auth/
+│   │   │   ├── cli/
+│   │   │   ├── config/
+│   │   │   ├── db/
+│   │   │   ├── domain/
+│   │   │   ├── providers/
+│   │   │   │   ├── crypto/
+│   │   │   │   ├── fx/
+│   │   │   │   ├── mock/
+│   │   │   │   └── stocks/
+│   │   │   ├── repositories/
+│   │   │   │   ├── memory/
+│   │   │   │   └── mongo/
+│   │   │   ├── scheduler/
+│   │   │   ├── services/
+│   │   │   └── users/
+│   │   ├── test/
+│   │   └── package.json
+│   └── web/
+│       ├── src/
+│       │   ├── app/
+│       │   │   ├── (app)/
+│       │   │   ├── api/
+│       │   │   └── login/
+│       │   ├── components/
+│       │   └── lib/
+│       ├── test/
+│       └── package.json
 ├── packages/
-│ └── shared/
-│ ├── src/
-│ │ ├── types/
-│ │ ├── schemas/
-│ │ └── constants/
-│ └── package.json
-│
+│   └── shared/
+│       ├── src/
+│       │   ├── constants/
+│       │   ├── schemas/
+│       │   ├── types/
+│       │   └── utils/
+│       └── test/
 ├── docs/
-│ ├── SPEC.md
-│ ├── API.md
-│ ├── DATA_MODEL.md
-│ └── DEVELOPMENT.md
-│
+│   ├── SPEC.md
+│   ├── API.md
+│   ├── DATA_MODEL.md
+│   ├── DEVELOPMENT.md
+│   └── IMPLEMENTATION_REPORT.md
+├── deploy/
+│   └── nginx/
+├── scripts/
 ├── .env.example
 ├── package.json
 └── README.md
 
-이 구조는 권장안이다. 기존 저장소가 있다면 기존의 Node.js, TypeScript, 패키지 매니저 및 테스트 규칙을 먼저 확인하고 최소한의 변경으로 적용한다.
-
-특히 프로젝트에 Yarn PnP가 이미 적용되어 있다면, 별도의 근거 없이 node_modules 기반 구조로 변경하지 않는다.
+`packages/shared`는 소스 전용 패키지다(`main`/`types`가 `src/index.ts`).
+API는 tsup `noExternal`, 웹은 Next `transpilePackages`로 같은 소스를 사용한다.
+리포지토리는 `memory`와 `mongo` 두 구현을 함께 유지한다.
 11.1. 모듈 간 의존성 규칙
 
 모듈 간 의존성은 다음 방향을 권장한다.
@@ -1249,7 +1362,7 @@ Database Implementations
 핵심 자산 평가 로직은 특정 공급자 API의 응답 형식에 의존하지 않아야 한다. 12. 환경 설정 및 실행
 12.1. 환경변수
 
-.env.example에 필요한 환경변수를 정의한다.
+.env.example에 필요한 환경변수를 정의한다. 현재 기본값은 다음과 같다.
 
 # Application
 
@@ -1257,37 +1370,78 @@ NODE_ENV=development
 APP_TIMEZONE=Asia/Seoul
 BASE_CURRENCY=KRW
 
-# Backend
+# Backend API
 
 API_HOST=127.0.0.1
 API_PORT=3001
 API_BASE_PATH=/api/v1
+API_AUTH_TOKEN=
 
-# Frontend
+# Authentication / sessions
+
+AUTH_REQUIRED=true
+AUTH_LOCAL_ENABLED=true
+AUTH_GOOGLE_ENABLED=false
+SESSION_SECRET=local-development-session-secret-change-me
+SESSION_STORE=mongo
+SESSION_COOKIE_NAME=jfolio.sid
+AUTH_CSRF_COOKIE_NAME=jfolio.csrf
+SESSION_MAX_AGE_MS=604800000
+SESSION_COOKIE_SECURE=auto
+SESSION_COOKIE_SAMESITE=lax
+SESSION_TRUST_PROXY=true
+AUTH_BCRYPT_ROUNDS=12
+AUTH_LOGIN_RATE_LIMIT_WINDOW_MS=900000
+AUTH_LOGIN_RATE_LIMIT_MAX=10
+
+# Frontend (Next.js server-side)
 
 WEB_PORT=3000
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3001/api/v1
+API_BASE_URL=http://localhost:3001/api/v1
+# API_AUTH_URL=http://localhost:3001/api/auth
+# API_AUTH_TOKEN=
+# NEXT_PUBLIC_TIME_ZONE=Asia/Seoul
 
 # Database
 
 MONGODB_URI=mongodb://localhost:27017/jFolio
+MONGODB_DB=jFolio
 
 # Collection
 
 STOCK_COLLECTION_INTERVAL_SECONDS=60
 CRYPTO_COLLECTION_INTERVAL_SECONDS=10
 FX_COLLECTION_INTERVAL_SECONDS=60
+STOCK_PROVIDER=live
+CRYPTO_PROVIDER=live
+FX_PROVIDER=live
+COLLECTION_SCHEDULER_ENABLED=true
+HISTORY_BACKFILL_ENABLED=true
+HISTORY_BACKFILL_DAYS=365
 
 # Snapshot
 
 HOURLY_SNAPSHOT_ENABLED=true
 DAILY_SNAPSHOT_ENABLED=true
 
+# FX
+
+STABLECOIN_USD_PEGS=USDT,USDC,BUSD,DAI,TUSD,FDUSD
+
 # Provider credentials
+# 기본 공급자(Binance/Yahoo/Frankfurter)는 공개 API라 키가 필요 없다.
 
-# 실제 공급자 추가 시 해당 공급자의 환경변수를 정의한다.
+API는 리포지토리 루트의 `.env`를 명시적으로 읽는다. Next.js는 그 파일을 읽지
+않으므로 웹 변수(`API_BASE_URL`, `API_AUTH_URL`, `API_AUTH_TOKEN`,
+`AUTH_REQUIRED`, `SESSION_COOKIE_NAME`, `AUTH_CSRF_COOKIE_NAME`,
+`NEXT_PUBLIC_TIME_ZONE`)는 셸 또는 `apps/web/.env*`에서 제공한다. 운영에서는
+PM2가 업로드한 `<DEPLOY_PATH>/.env`를 두 프로세스에 주입한다.
 
-위 설정은 예시다. 실제 공급자 API 키는 해당 공급자를 선택한 뒤 추가한다.
+운영 환경에서는 `SESSION_SECRET`이 32자 이상이어야 하고
+`SESSION_STORE=memory`는 거부된다. `AUTH_REQUIRED=false`는 레거시 무인증
+모드이며 운영에서 사용하지 않는다. 계정은 다음 명령으로 생성한다.
+
+CREATE_USER_PASSWORD='...' yarn create-user --email you@example.com --name "You"
 
 보안 규칙
 
@@ -1298,31 +1452,49 @@ DAILY_SNAPSHOT_ENABLED=true
 
 12.2. 실행 명령
 
-프로젝트의 패키지 매니저와 스크립트에 맞게 다음과 같은 명령을 제공한다.
+루트 `package.json`에서 다음 명령을 제공한다.
 
 # 의존성 설치
 
 yarn install
 
-# 개발 모드
+# 개발 모드 (API :3001 + Next.js :3000)
 
 yarn dev
+yarn dev:api
+yarn dev:web
 
-# 빌드
+# 빌드·검사
 
 yarn build
+yarn typecheck
+yarn lint
 
 # 테스트
 
 yarn test
+yarn test:api
+yarn test:web
+yarn workspace @jfolio/api test test/financial.test.ts
 
-# 코드 검사
+# 시드·수집·백필
 
-yarn lint
+yarn seed
+yarn collect:once
+yarn backfill:history --days 30
 
-위 명령은 목표 인터페이스이며, 실제 실행 가능하도록 루트 package.json에 스크립트를 구현해야 한다.
+# 백업·복원
 
-API 서버, 데이터 수집 워커 및 Next.js 웹 서버는 독립적으로 실행하고 종료할 수 있어야 한다.
+yarn backup
+yarn restore --dir backup/jfolio-backup-...
+
+# 계정 생성
+
+CREATE_USER_PASSWORD='...' yarn create-user --email you@example.com --name "You"
+
+API 서버, 수집 스케줄러와 Next.js 웹 서버는 독립적으로 실행하고 종료할 수
+있다. 테스트는 MongoDB나 네트워크 없이 인메모리 리포지토리·Mock 공급자·고정
+시각으로 실행된다. 전체 운영 명령과 배포 절차는 `README.md`를 따른다.
 
 13. MVP 개발 범위
 
@@ -1597,3 +1769,25 @@ jFolio는 단순한 주가 조회 웹사이트가 아니라, 금융 데이터 �
 셋째, 데이터의 시간적 일관성. 과거 시점의 자산 현황을 현재 데이터와 혼동하지 않고 복원할 수 있어야 한다.
 
 이 세 가지가 확립되면 자산 대시보드, 시그널, 투자 성과 분석 및 AI 기반 분석 기능은 그 위에 단계적으로 추가할 수 있다.
+
+부록 A. 현재 구현 현황 (2026-10-28)
+
+A.1. 구현 완료
+
+    모노레포: `packages/shared`(소스 전용) + `apps/api`(Express/MongoDB) + `apps/web`(Next.js 16/React 19).
+    인증: 이메일/비밀번호 로그인, bcryptjs, MongoDB 서버 세션, CSRF double-submit, 로그인 rate limit, `/api/auth` 라우트, 로그인 페이지와 접근 제어. 계정은 `yarn create-user`로 생성한다.
+    공급자: Binance(크립토), Yahoo Chart(주식/ETF, 국내 6자리 종목 접미사 자동 처리), Frankfurter(ECB FX), 결정적 Mock 공급자. 주식/ETF, 크립토, FX를 자산군별로 live/mock 선택할 수 있다.
+    수집: 인프로세스 스케줄러, 수동 수집 API, 과거 일별 시세/FX 백필, UTC 자정·기동 시 `1d` 증분 생성, 최신 시세 물질화(`latest_quotes`).
+    포트폴리오: 생성·조회·수정, 기본/숨김 포트폴리오, 단일 포트폴리오와 `All` 통합 대시보드, 과거 평가 시계열, 스냅샷.
+    대시보드: 통합 기준 통화/기준 시각 헤더, 기간별 평가금액 차트(기본 `3M`), 최고/최저 주석, 자산군·통화 비중, 보유 종목 3컬럼 표, 최근 시그널, 데이터 상태.
+    평가: 이동평균 원가(매수 수수료 포함), 기준 통화 환산, FX 직접/역방향/스테이블코인 USD 페그 해석, 평가 불가를 `null`/`UNAVAILABLE`로 유지하고 합계에서 제외.
+    시그널: 가격 하락·상승·임계치·포트폴리오 임계치 규칙, 중복 방지, 발생 이력, 웹 규칙 관리.
+    운영: `yarn seed`, `yarn collect:once`, `yarn backfill:history`, `yarn backup`/`yarn restore`, PM2 기반 배포 스크립트, nginx TLS 부트스트랩, 빌드 버전 표시와 로딩 진행 UI.
+    검증: `yarn typecheck`, `yarn lint`, `yarn test` 통과(shared 11, API 179, web 68 테스트).
+
+A.2. 후속 범위
+
+    Google SSO는 Phase 2용 구조(`user_identities`)만 준비되어 있고 라우트는 없다.
+    회원가입·비밀번호 재설정·이메일 인증은 제공하지 않는다.
+    인증 계정은 도입되었지만 포트폴리오·거래 데이터는 아직 `DEFAULT_USER_ID` 아래에서 공유된다.
+    이메일·모바일 푸시 등 외부 알림 채널과 증권사 계좌 자동 연동은 포함되지 않는다.
