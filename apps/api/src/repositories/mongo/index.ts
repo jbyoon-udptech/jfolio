@@ -248,6 +248,17 @@ class MongoQuoteRepository implements QuoteRepository {
     return result;
   }
 
+  async getEarliest(
+    instrumentIds: string[],
+    interval?: MarketQuote["interval"],
+  ): Promise<MarketQuote | null> {
+    if (instrumentIds.length === 0) return null;
+    const filter: Filter<MarketQuote> = { instrumentId: { $in: instrumentIds } };
+    if (interval) filter.interval = interval;
+    const doc = await this.quotes.find(filter, NO_ID).sort({ timestamp: 1 }).limit(1).next();
+    return doc ? stripId<MarketQuote>(doc) : null;
+  }
+
   async getHistorical(instrumentId: string, query: HistoricalQuery = {}): Promise<MarketQuote[]> {
     const filter: Filter<MarketQuote> = { instrumentId };
     if (query.interval) filter.interval = query.interval;

@@ -55,6 +55,12 @@ export interface QuoteRepository {
   insertQuotes(quotes: MarketQuote[]): Promise<{ inserted: number; duplicates: number }>;
   getLatest(instrumentId: string): Promise<LatestQuote | null>;
   getLatestMany(instrumentIds: string[]): Promise<Map<string, LatestQuote>>;
+  /**
+   * Earliest stored quote across `instrumentIds`, optionally restricted to one
+   * interval. Used to anchor the "ALL" history range to real data instead of a
+   * fixed lookback.
+   */
+  getEarliest(instrumentIds: string[], interval?: MarketQuote["interval"]): Promise<MarketQuote | null>;
   getHistorical(instrumentId: string, query?: HistoricalQuery): Promise<MarketQuote[]>;
   /** Latest quote strictly before `before` (for previous-close references). */
   getLastBefore(instrumentId: string, before: Date, interval?: DataInterval): Promise<MarketQuote | null>;

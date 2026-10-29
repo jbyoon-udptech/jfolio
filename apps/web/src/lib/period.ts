@@ -42,29 +42,43 @@ function startOfYearInTimeZone(now: Date, timeZone: string): Date {
   return new Date(midnightUtc - offset);
 }
 
-/** Translate a UI period into a history range + interval (UI-001). */
+export type PeriodRange =
+  | { from: Date; to: Date; interval: "hourly" | "daily"; all: false }
+  | { from: null; to: Date; interval: "daily"; all: true };
+
+/**
+ * Translate a UI period into a history range + interval (UI-001).
+ *
+ * `ALL` deliberately has no client-side `from`: the first quote date lives in
+ * the database, so the API resolves it when the request includes `range=ALL`.
+ */
 export function periodRange(
   period: Period,
   now: Date = new Date(),
-): { from: Date; to: Date; interval: "hourly" | "daily" } {
+): PeriodRange {
   switch (period) {
     case "1D":
-      return { from: new Date(now.getTime() - DAY), to: now, interval: "hourly" };
+      return { from: new Date(now.getTime() - DAY), to: now, interval: "hourly", all: false };
     case "1W":
-      return { from: new Date(now.getTime() - 7 * DAY), to: now, interval: "daily" };
+      return { from: new Date(now.getTime() - 7 * DAY), to: now, interval: "daily", all: false };
     case "1M":
-      return { from: new Date(now.getTime() - 30 * DAY), to: now, interval: "daily" };
+      return { from: new Date(now.getTime() - 30 * DAY), to: now, interval: "daily", all: false };
     case "3M":
-      return { from: new Date(now.getTime() - 90 * DAY), to: now, interval: "daily" };
+      return { from: new Date(now.getTime() - 90 * DAY), to: now, interval: "daily", all: false };
     case "6M":
-      return { from: new Date(now.getTime() - 180 * DAY), to: now, interval: "daily" };
+      return { from: new Date(now.getTime() - 180 * DAY), to: now, interval: "daily", all: false };
     case "YTD":
-      return { from: startOfYearInTimeZone(now, TIME_ZONE), to: now, interval: "daily" };
+      return {
+        from: startOfYearInTimeZone(now, TIME_ZONE),
+        to: now,
+        interval: "daily",
+        all: false,
+      };
     case "1Y":
-      return { from: new Date(now.getTime() - 365 * DAY), to: now, interval: "daily" };
+      return { from: new Date(now.getTime() - 365 * DAY), to: now, interval: "daily", all: false };
     case "ALL":
     default:
-      return { from: new Date(now.getTime() - 365 * DAY), to: now, interval: "daily" };
+      return { from: null, to: now, interval: "daily", all: true };
   }
 }
 

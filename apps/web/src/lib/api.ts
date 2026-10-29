@@ -142,6 +142,8 @@ export const api = {
       to?: string;
       interval?: string;
       baseCurrency?: string;
+      /** `ALL` asks the API to start at the first stored quote. */
+      range?: "ALL";
     } = {},
   ) =>
     request<{

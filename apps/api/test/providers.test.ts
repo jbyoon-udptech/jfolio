@@ -326,4 +326,20 @@ describe("Yahoo stock provider symbol resolution", () => {
       "2026-10-15T00:00:00.000Z",
     ]);
   });
+
+  it("uses an explicit period for spans beyond Yahoo's named ranges", async () => {
+    const from = new Date("2025-01-01T00:00:00.000Z");
+    const to = new Date("2026-10-27T00:00:00.000Z");
+    const { fetchImpl, calls } = routedFetch([
+      { match: "000660.KS", payload: yahooPayload("000660.KS", 100) },
+    ]);
+    const provider = new YahooStockProvider("https://query1.finance.yahoo.com", fetchImpl);
+
+    await provider.getHistoricalQuotes(stockInstrument(), from, to, "1d");
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(`period1=${Math.floor(from.getTime() / 1000)}`);
+    expect(calls[0]).toContain(`period2=${Math.ceil(to.getTime() / 1000)}`);
+    expect(calls[0]).not.toContain("range=1y");
+  });
 });

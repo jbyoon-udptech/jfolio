@@ -204,7 +204,8 @@ export class HistoricalBackfillService {
 
     // Start one day before the first trade so the valuation at that timestamp
     // can use the previous daily close. If the instrument has no ledger yet,
-    // use the configured fallback window (the chart's "ALL" range is 365d).
+    // use the configured fallback window; the dashboard's "ALL" range is
+    // resolved from whatever quotes actually get stored.
     const earliest = await this.repos.transactions.list({
       instrumentId: instrument.instrumentId,
       limit: 1,

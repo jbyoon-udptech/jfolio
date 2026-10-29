@@ -161,6 +161,20 @@ export class MemoryQuoteRepository implements QuoteRepository {
     return result;
   }
 
+  async getEarliest(
+    instrumentIds: string[],
+    interval?: MarketQuote["interval"],
+  ): Promise<MarketQuote | null> {
+    if (instrumentIds.length === 0) return null;
+    const ids = new Set(instrumentIds);
+    const items = this.quotes.filter(
+      (q) => ids.has(q.instrumentId) && (!interval || q.interval === interval),
+    );
+    items.sort(byTimeAsc);
+    const found = items[0];
+    return found ? clone(found) : null;
+  }
+
   async getHistorical(instrumentId: string, query: HistoricalQuery = {}): Promise<MarketQuote[]> {
     let items = this.quotes.filter((q) => q.instrumentId === instrumentId);
     if (query.interval) items = items.filter((q) => q.interval === query.interval);

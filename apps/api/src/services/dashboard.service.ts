@@ -148,6 +148,30 @@ export class DashboardService {
   }
 
   /**
+   * FR-053: earliest start for the aggregate `ALL` chart. The aggregate must
+   * not begin later than the longest history it contains, otherwise a
+   * portfolio with older quotes would be clipped to another portfolio's first
+   * observation.
+   */
+  async historyStartForAll(
+    portfolios: Portfolio[],
+    options: { to?: Date } = {},
+  ): Promise<Date | null> {
+    const starts = await Promise.all(
+      portfolios.map((portfolio) =>
+        this.valuation.historyStart(portfolio.portfolioId, options),
+      ),
+    );
+    let earliest: Date | null = null;
+    for (const start of starts) {
+      if (start && (!earliest || start.getTime() < earliest.getTime())) {
+        earliest = start;
+      }
+    }
+    return earliest;
+  }
+
+  /**
    * FR-053: aggregate history for the `All` dashboard. A point is unavailable
    * when any portfolio is unavailable at that time, so the total is never
    * understated by a partial series. The per-portfolio series are returned

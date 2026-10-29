@@ -51,6 +51,12 @@ const STALE_MS = 24 * 60 * 60 * 1000;
  * not exhaust the Mongo connection pool while still hiding per-point latency.
  */
 const HISTORY_CONCURRENCY = 12;
+/**
+ * Safety bound for a generated series. Daily bars reach this only after ~54
+ * years, while the normal "ALL" window is anchored to the first stored quote,
+ * so this never truncates a realistic portfolio.
+ */
+const MAX_SERIES_POINTS = 20_000;
 
 /**
  * FR-041 / FR-042 / FR-043 / FR-044 / FR-045 / FR-053: Computes market value,
@@ -304,6 +310,37 @@ export class ValuationService {
     return ratio === null ? null : round(multiply(ratio, 100), 4);
   }
 
+  /**
+   * FR-053: Start of the full ("ALL") history for a portfolio. The series
+   * should begin at the first quote that actually exists for an instrument the
+   * portfolio has ever held, not at an arbitrary one-year lookback. Cash-only
+   * portfolios fall back to their first transaction.
+   */
+  async historyStart(portfolioId: string, options: { to?: Date } = {}): Promise<Date | null> {
+    const to = options.to ?? this.now();
+    const ledger = await this.repos.transactions.listByPortfolio(portfolioId, to);
+    const firstTransaction = ledger[0]?.timestamp ?? null;
+    if (ledger.length === 0) return firstTransaction;
+
+    const instrumentIds = [...new Set(ledger.map((transaction) => transaction.instrumentId))];
+    const instruments = await this.repos.instruments.findMany(instrumentIds);
+    const pricedInstrumentIds = instruments
+      .filter((instrument) => instrument.assetType !== "CASH")
+      .map((instrument) => instrument.instrumentId);
+    if (pricedInstrumentIds.length === 0) return firstTransaction;
+
+    const earliest = await this.repos.quotes.getEarliest(pricedInstrumentIds);
+    if (!earliest) return firstTransaction;
+    // The chart is daily, so start at the beginning of the quote's UTC day.
+    return new Date(
+      Date.UTC(
+        earliest.timestamp.getUTCFullYear(),
+        earliest.timestamp.getUTCMonth(),
+        earliest.timestamp.getUTCDate(),
+      ),
+    );
+  }
+
   /** FR-053: Daily (or hourly) total-value series reconstructed from history. */
   async historySeries(
     portfolioId: string,
@@ -321,11 +358,9 @@ export class ValuationService {
 
     const cursors: Date[] = [];
     let cursor = new Date(options.from);
-    let guard = 0;
-    while (cursor <= options.to && guard < 2000) {
+    while (cursor <= options.to && cursors.length < MAX_SERIES_POINTS) {
       cursors.push(cursor);
       cursor = new Date(cursor.getTime() + stepMs);
-      guard += 1;
     }
     if (cursors.length === 0) return [];
 

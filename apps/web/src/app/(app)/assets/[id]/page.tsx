@@ -43,7 +43,10 @@ export default async function AssetDetailPage({
     safe(() =>
       api.quotes(id, {
         interval: range.interval === "hourly" ? undefined : "1d",
-        from: range.from.toISOString(),
+        // `ALL` has no client-side start date; omitting `from` returns the
+        // newest 5000 observations, which covers the full daily history for a
+        // typical portfolio.
+        from: range.all ? undefined : range.from.toISOString(),
         to: range.to.toISOString(),
         limit: 5000,
       }),

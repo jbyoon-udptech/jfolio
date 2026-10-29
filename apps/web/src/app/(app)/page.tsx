@@ -68,7 +68,8 @@ export default async function DashboardPage({
   const historyResult = await safe(() =>
     api.dashboardHistory({
       portfolioId: dashboard.portfolioId,
-      from: range.from.toISOString(),
+      from: range.all ? undefined : range.from.toISOString(),
+      range: range.all ? "ALL" : undefined,
       to: range.to.toISOString(),
       interval: range.interval,
     }),

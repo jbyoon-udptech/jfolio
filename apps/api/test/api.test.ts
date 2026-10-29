@@ -1196,6 +1196,71 @@ describe("8.2 dashboard", () => {
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].totalAssetValue).toBe(1000);
   });
+
+  it("starts ALL dashboard history at the earliest stored quote", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
+    const second = await container.portfolios.create({ name: "Second", baseCurrency: "KRW" });
+
+    const a = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const b = await createInstrument(container, {
+      symbol: "BBB",
+      name: "Asset B",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+
+    const older = new Date(FIXED_NOW.getTime() - 40 * 86_400_000);
+    older.setUTCHours(0, 0, 0, 0);
+    const newer = new Date(FIXED_NOW.getTime() - 10 * 86_400_000);
+    newer.setUTCHours(0, 0, 0, 0);
+
+    for (const [portfolio, instrument, timestamp] of [
+      [first, a, older],
+      [second, b, newer],
+    ] as const) {
+      await container.transactions.create({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp,
+        quantity: 10,
+        price: 80,
+        currency: "KRW",
+        fee: 0,
+      });
+      await container.marketData.storeQuote(
+        instrument,
+        makeQuote(instrument, 100, { timestamp, interval: "1d" }),
+      );
+    }
+
+    const at = encodeURIComponent(FIXED_NOW.toISOString());
+    const single = await request(app).get(
+      `${BASE}/dashboard/history?portfolioId=${first.portfolioId}&range=ALL&to=${at}&interval=daily`,
+    );
+    expect(single.status).toBe(200);
+    expect(single.body.from).toBe(older.toISOString());
+    // Forty days of daily points prove this is not the 30-day fallback.
+    expect(single.body.items).toHaveLength(41);
+
+    const aggregate = await request(app).get(
+      `${BASE}/dashboard/history?portfolioId=all&range=ALL&to=${at}&interval=daily`,
+    );
+    expect(aggregate.status).toBe(200);
+    expect(aggregate.body.from).toBe(older.toISOString());
+    expect(aggregate.body.series).toHaveLength(2);
+  });
 });
 
 describe("8.7 system", () => {

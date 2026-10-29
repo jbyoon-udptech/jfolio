@@ -41,6 +41,8 @@ const YAHOO_INTERVALS: Partial<Record<DataInterval, string>> = {
 
 const DAY_MS = 86_400_000;
 
+type YahooChartWindow = { range: string } | { from: Date; to: Date };
+
 /**
  * Yahoo instrument types accepted for an asset type when jFolio derived the
  * exchange suffix. A KOSDAQ code requested with the KOSPI `.KS` suffix can
@@ -84,12 +86,18 @@ export class YahooStockProvider implements MarketDataProvider {
 
   private async fetchChart(
     symbol: string,
-    range: string,
+    window: YahooChartWindow,
     interval: string,
   ): Promise<NonNullable<YahooChartResponse["chart"]["result"]>[number]> {
+    const query =
+      "range" in window
+        ? `range=${window.range}&interval=${interval}`
+        : `period1=${Math.floor(window.from.getTime() / 1000)}` +
+          `&period2=${Math.ceil(window.to.getTime() / 1000)}` +
+          `&interval=${interval}`;
     const url =
       `${this.baseUrl}/v8/finance/chart/${encodeURIComponent(symbol)}` +
-      `?range=${range}&interval=${interval}`;
+      `?${query}`;
     const data = await fetchJson<YahooChartResponse>(url, {
       fetchImpl: this.fetchImpl,
       headers: { "user-agent": "Mozilla/5.0 (compatible; jFolio/0.1)" },
@@ -103,7 +111,7 @@ export class YahooStockProvider implements MarketDataProvider {
 
   private async request(
     instrument: Instrument,
-    range: string,
+    window: YahooChartWindow,
     interval: string,
   ): Promise<NonNullable<YahooChartResponse["chart"]["result"]>[number]> {
     const link = instrument.providers.find((p) => p.providerId === this.providerId);
@@ -119,7 +127,7 @@ export class YahooStockProvider implements MarketDataProvider {
     let lastError: unknown;
     for (const symbol of candidates) {
       try {
-        const result = await this.fetchChart(symbol, range, interval);
+        const result = await this.fetchChart(symbol, window, interval);
         if (symbol !== raw && !typeMatches(instrument.assetType, result.meta.instrumentType)) {
           lastError = new ProviderError(
             `Yahoo ${symbol} is ${result.meta.instrumentType ?? "unknown"}, not ${instrument.assetType}`,
@@ -143,7 +151,7 @@ export class YahooStockProvider implements MarketDataProvider {
   }
 
   async getLatestQuote(instrument: Instrument): Promise<MarketQuote | null> {
-    const result = await this.request(instrument, "1d", "1m");
+    const result = await this.request(instrument, { range: "1d" }, "1m");
     const price = result.meta.regularMarketPrice;
     if (price === undefined || !Number.isFinite(price) || price <= 0) {
       return null;
@@ -180,7 +188,12 @@ export class YahooStockProvider implements MarketDataProvider {
     // A week of daily bars guarantees the requested completed day is present
     // even when another market has already opened (e.g. KRX at UTC midnight).
     const effectiveRange = interval === "1d" && range === "1d" ? "7d" : range;
-    const result = await this.request(instrument, effectiveRange, yahooInterval);
+    // Yahoo caps `range=1y`, which silently truncated long backfills. Ask for
+    // an explicit Unix-second window whenever the requested span is longer
+    // than the largest named range.
+    const window: YahooChartWindow =
+      spanDays > 60 ? { from, to } : { range: effectiveRange };
+    const result = await this.request(instrument, window, yahooInterval);
     const timestamps = result.timestamp ?? [];
     const quote = result.indicators.quote[0];
     if (!quote) return [];

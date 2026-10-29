@@ -148,7 +148,8 @@ describe("period helpers (UI-001)", () => {
     const now = new Date("2026-10-16T12:00:00.000Z");
     const intraday = periodRange("1D", now);
     expect(intraday.interval).toBe("hourly");
-    expect(intraday.from.toISOString()).toBe("2026-10-15T12:00:00.000Z");
+    expect(intraday.all).toBe(false);
+    expect(intraday.from?.toISOString()).toBe("2026-10-15T12:00:00.000Z");
 
     const monthly = periodRange("1M", now);
     expect(monthly.interval).toBe("daily");
@@ -160,7 +161,17 @@ describe("period helpers (UI-001)", () => {
     const ytd = periodRange("YTD", now);
     expect(ytd.interval).toBe("daily");
     // 2026-01-01 00:00 in Asia/Seoul (UTC+9).
-    expect(ytd.from.toISOString()).toBe("2025-12-31T15:00:00.000Z");
+    expect(ytd.from?.toISOString()).toBe("2025-12-31T15:00:00.000Z");
     expect(ytd.to.getTime()).toBe(now.getTime());
+  });
+
+  it("leaves ALL unbounded so the API can use the first stored quote", () => {
+    const now = new Date("2026-10-16T12:00:00.000Z");
+    const all = periodRange("ALL", now);
+
+    expect(all.all).toBe(true);
+    expect(all.from).toBeNull();
+    expect(all.interval).toBe("daily");
+    expect(all.to.getTime()).toBe(now.getTime());
   });
 });

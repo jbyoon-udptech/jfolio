@@ -21,6 +21,12 @@ const dashboardQuery = z.object({
 
 const dashboardHistoryQuery = historyQuery.extend({
   portfolioId: z.string().min(1).optional(),
+  /**
+   * `ALL` is resolved server-side from stored quotes. The client cannot know
+   * the earliest observation before asking for history, and resolving it here
+   * keeps the range consistent for single and aggregate dashboards.
+   */
+  range: z.literal("ALL").optional(),
 });
 
 /**
@@ -62,15 +68,29 @@ export function createDashboardRouter(container: Container): Router {
     asyncHandler(async (req, res) => {
       const query = parseQuery(dashboardHistoryQuery, req.query);
       const to = query.to ? new Date(query.to) : new Date();
-      const from = query.from
-        ? new Date(query.from)
-        : new Date(to.getTime() - 30 * DAY_MS);
+      const fallbackFrom = new Date(to.getTime() - 30 * DAY_MS);
       const portfolioId = query.portfolioId;
+      const isAll = !portfolioId || portfolioId === ALL_PORTFOLIOS_ID;
+      const portfolios = isAll ? await visiblePortfolios(container) : null;
+      const portfolio = isAll
+        ? null
+        : await container.portfolios.get(portfolioId);
+      if (!isAll && !portfolio) throw notFound(`Portfolio ${portfolioId} not found`);
 
-      if (!portfolioId || portfolioId === ALL_PORTFOLIOS_ID) {
-        const portfolios = await visiblePortfolios(container);
-        const history = await container.dashboard.getHistoryForAll(portfolios, {
-          baseCurrency: baseCurrencyFor(portfolios, query.baseCurrency),
+      let from = query.from ? new Date(query.from) : fallbackFrom;
+      if (query.range === "ALL") {
+        const start = isAll
+          ? await container.dashboard.historyStartForAll(portfolios ?? [], { to })
+          : portfolio
+            ? await container.valuation.historyStart(portfolio.portfolioId, { to })
+            : null;
+        from = start ?? from;
+      }
+
+      if (isAll) {
+        const visible = portfolios ?? [];
+        const history = await container.dashboard.getHistoryForAll(visible, {
+          baseCurrency: baseCurrencyFor(visible, query.baseCurrency),
           from,
           to,
           interval: query.interval,
@@ -86,16 +106,15 @@ export function createDashboardRouter(container: Container): Router {
         return;
       }
 
-      const portfolio = await container.portfolios.get(portfolioId);
       if (!portfolio) throw notFound(`Portfolio ${portfolioId} not found`);
-      const points = await container.valuation.historySeries(portfolioId, {
+      const points = await container.valuation.historySeries(portfolio.portfolioId, {
         baseCurrency: query.baseCurrency,
         from,
         to,
         interval: query.interval,
       });
       res.json({
-        portfolioId,
+        portfolioId: portfolio.portfolioId,
         interval: query.interval,
         from,
         to,
