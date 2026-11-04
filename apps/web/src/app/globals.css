@@ -375,6 +375,83 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/* Asset detail summary: the three metric groups share one card so they stay
+   compact (and the chart stays reachable) on mobile. */
+.asset-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.asset-summary-item {
+  min-width: 0;
+}
+
+.asset-summary-item + .asset-summary-item {
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+
+.asset-summary-providers {
+  overflow-wrap: anywhere;
+}
+
+.asset-summary-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.asset-summary-meta .metric-label {
+  margin: 0;
+}
+
+.asset-summary-meta-value {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .asset-summary {
+    padding: 14px;
+  }
+
+  .asset-summary-grid {
+    gap: 10px;
+  }
+
+  .asset-summary-item + .asset-summary-item {
+    padding-left: 10px;
+  }
+
+  .asset-summary-item .metric-value {
+    font-size: 17px;
+  }
+
+  .asset-summary-item .metric-value.small {
+    font-size: 14px;
+  }
+
+  .asset-summary-item .metric-value,
+  .asset-summary-item .metric-delta {
+    overflow-wrap: anywhere;
+  }
+
+  .asset-summary-item .metric-label {
+    font-size: 11px;
+  }
+
+  .asset-summary-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    margin-top: 6px;
+    font-size: 11px;
+  }
+}
+
 .up {
   color: var(--up);
 }
@@ -695,7 +772,8 @@ button.pill {
 }
 
 /* Max/min labels stay pinned to their chart points. They sit below the max
-   point and above the min point so the default extremes never clip. */
+   point and above the min point so the default extremes never clip. The
+   translucent background keeps the price line readable underneath. */
 .chart-annotation {
   position: absolute;
   z-index: 1;
@@ -703,9 +781,9 @@ button.pill {
   align-items: center;
   gap: 5px;
   padding: 2px 6px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(42, 51, 61, 0.7);
   border-radius: 6px;
-  background: rgba(30, 37, 45, 0.9);
+  background: rgba(30, 37, 45, 0.55);
   color: var(--text);
   font-size: 11px;
   line-height: 1.3;

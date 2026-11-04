@@ -134,41 +134,49 @@ export default async function AssetDetailPage({
         }
       />
 
-      <div className="grid cols-3" style={{ marginBottom: 16 }}>
-        <div className="card">
-          <div className="metric-label">현재가</div>
-          <div className="metric-value">
-            {latest ? formatPrice(latest.price, priceCurrency) : "데이터 없음"}
+      {/* One compact summary card instead of three separate cards: on mobile the
+          three stacked cards pushed the price chart below the fold. */}
+      <div className="card asset-summary" style={{ marginBottom: 16 }}>
+        <div className="asset-summary-grid">
+          <div className="asset-summary-item">
+            <div className="metric-label">현재가</div>
+            <div className="metric-value">
+              {latest ? formatPrice(latest.price, priceCurrency) : "데이터 없음"}
+            </div>
+            <div className={`metric-delta ${changeClass(changeRate)}`}>
+              {changeRate === null ? (
+                <span className="muted">전일 대비 데이터 없음</span>
+              ) : (
+                <span>{formatPercent(changeRate * 100)}</span>
+              )}
+            </div>
           </div>
-          <div className={`metric-delta ${changeClass(changeRate)}`}>
-            {changeRate === null ? (
-              <span className="muted">전일 대비 데이터 없음</span>
-            ) : (
-              <span>{formatPercent(changeRate * 100)}</span>
-            )}
+          <div className="asset-summary-item">
+            <div className="metric-label">거래량</div>
+            <div className="metric-value small">
+              {latest?.volume === undefined || latest.volume === null
+                ? "제공되지 않음"
+                : formatQuantity(latest.volume)}
+            </div>
+            <div className="asset-summary-meta">
+              <span className="metric-label">최종 갱신</span>
+              <span className="asset-summary-meta-value">
+                {formatDateTime(latest?.timestamp, { seconds: false })}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="card">
-          <div className="metric-label">거래량</div>
-          <div className="metric-value small">
-            {latest?.volume === undefined || latest.volume === null
-              ? "제공되지 않음"
-              : formatQuantity(latest.volume)}
+          <div className="asset-summary-item">
+            <div className="metric-label">데이터 공급자</div>
+            <div className="asset-summary-providers">
+              {instrument.providers.length === 0
+                ? "—"
+                : instrument.providers.map((p) => p.providerId).join(", ")}
+            </div>
+            <div className="asset-summary-meta">
+              <span className="metric-label">상태</span>
+              <StatusBadge status={latest ? "NORMAL" : "NO_DATA"} />
+            </div>
           </div>
-          <div className="metric-label" style={{ marginTop: 12 }}>
-            최종 갱신
-          </div>
-          <div>{formatDateTime(latest?.timestamp)}</div>
-        </div>
-        <div className="card">
-          <div className="metric-label">데이터 공급자</div>
-          <div style={{ marginBottom: 10 }}>
-            {instrument.providers.length === 0
-              ? "—"
-              : instrument.providers.map((p) => p.providerId).join(", ")}
-          </div>
-          <div className="metric-label">상태</div>
-          <StatusBadge status={latest ? "NORMAL" : "NO_DATA"} />
         </div>
       </div>
 
