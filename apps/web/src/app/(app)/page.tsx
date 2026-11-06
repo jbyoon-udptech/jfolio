@@ -158,6 +158,7 @@ export default async function DashboardPage({
         <AllDashboardSections
           summaries={portfolioSummaries}
           series={historySeries}
+          totalPoints={points}
           currency={currency}
           period={period}
           portfolioQuery={portfolioQuery}

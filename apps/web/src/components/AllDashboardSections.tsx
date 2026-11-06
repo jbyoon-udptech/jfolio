@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { PortfolioTrendChart } from "@/components/PortfolioTrendChart";
 import { PortfolioValuationTable } from "@/components/PortfolioValuationTable";
-import { toPortfolioTrendSeries } from "@/lib/dashboard";
+import { withTotalTrendSeries } from "@/lib/dashboard";
 import { PERIODS, type Period } from "@/lib/period";
-import type { PortfolioDashboardSummary, PortfolioHistorySeries } from "@/lib/types";
+import type {
+  HistoryPoint,
+  PortfolioDashboardSummary,
+  PortfolioHistorySeries,
+} from "@/lib/types";
 
 /**
  * UI-001: the extra sections shown when the page-level selector is `All`.
@@ -13,6 +17,7 @@ import type { PortfolioDashboardSummary, PortfolioHistorySeries } from "@/lib/ty
 export function AllDashboardSections({
   summaries,
   series,
+  totalPoints,
   currency,
   period,
   portfolioQuery,
@@ -20,12 +25,14 @@ export function AllDashboardSections({
 }: {
   summaries: PortfolioDashboardSummary[];
   series: PortfolioHistorySeries[];
+  /** Aggregate history (`items`), drawn as the highlighted total line. */
+  totalPoints: HistoryPoint[];
   currency: string;
   period: Period;
   portfolioQuery: string;
   interval: "hourly" | "daily";
 }) {
-  const trendSeries = toPortfolioTrendSeries(series);
+  const trendSeries = withTotalTrendSeries(series, totalPoints);
   const hasGap = trendSeries.some((item) =>
     item.points.some((point) => point.totalAssetValue === null),
   );

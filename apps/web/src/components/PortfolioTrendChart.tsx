@@ -33,6 +33,17 @@ function seriesColor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length] ?? "var(--accent)";
 }
 
+/** The aggregate line uses the foreground color so it never clashes with the
+    per-portfolio palette. */
+const TOTAL_SERIES_COLOR = "var(--text)";
+
+function seriesColorFor(
+  item: PortfolioTrendSeries | undefined,
+  index: number,
+): string {
+  return item?.total ? TOTAL_SERIES_COLOR : seriesColor(index);
+}
+
 function formatXAxisLabel(asOf: string, interval: "hourly" | "daily"): string {
   return interval === "hourly"
     ? formatDateTime(asOf, { seconds: false }).replace(/^\d{4}-/, "")
@@ -107,20 +118,24 @@ export function PortfolioTrendChart({
     ];
   }).flat();
 
-  const annotations = findSeriesChartExtremes(series).map((annotation) => {
+  // The aggregate is always the largest value, so annotating it would shadow
+  // the per-portfolio extremes. Keep the max/min labels on individual series.
+  const annotatableSeries = series.filter((item) => !item.total);
+  const annotations = findSeriesChartExtremes(annotatableSeries).map((annotation) => {
     const x = PAD + annotation.index * stepX;
     const y = valueToY(annotation.value);
     const horizontal = x < 110 ? "0" : x > WIDTH - 110 ? "-100%" : "-50%";
     const vertical =
       annotation.kind === "max" ? "10px" : "calc(-100% - 10px)";
+    const annotated = annotatableSeries[annotation.seriesIndex];
     return {
       ...annotation,
       x,
       y,
       transform: `translate(${horizontal}, ${vertical})`,
       tone: changeClass(annotation.changeRate),
-      color: seriesColor(annotation.seriesIndex),
-      label: series[annotation.seriesIndex]?.label ?? "",
+      color: seriesColorFor(annotated, annotation.seriesIndex),
+      label: annotated?.label ?? "",
     };
   });
 
@@ -148,7 +163,8 @@ export function PortfolioTrendChart({
           return {
             id: item.id,
             label: item.label,
-            color: seriesColor(index),
+            color: seriesColorFor(item, index),
+            total: item.total === true,
             value:
               value !== null && value !== undefined && Number.isFinite(value)
                 ? value
@@ -202,10 +218,13 @@ export function PortfolioTrendChart({
     <div>
       <div className="chart-legend">
         {series.map((item, index) => (
-          <span className="chart-legend-item" key={item.id}>
+          <span
+            className={`chart-legend-item${item.total ? " total" : ""}`}
+            key={item.id}
+          >
             <span
               className="chart-legend-swatch"
-              style={{ background: seriesColor(index) }}
+              style={{ background: seriesColorFor(item, index) }}
               aria-hidden="true"
             />
             {item.label}
@@ -228,11 +247,11 @@ export function PortfolioTrendChart({
               style={{ height }}
               preserveAspectRatio="none"
               role="img"
-              aria-label="포트폴리오별 평가금액 추이"
+              aria-label="포트폴리오별 평가금액과 전체 합계 추이"
               onPointerMove={handlePointerMove}
               onPointerLeave={() => setActiveIndex(null)}
             >
-              <title>포트폴리오별 평가금액 추이</title>
+              <title>포트폴리오별 평가금액과 전체 합계 추이</title>
               {ticks.map((tick) => (
                 <line
                   key={tick.fraction}
@@ -265,8 +284,10 @@ export function PortfolioTrendChart({
                   strokeDasharray="3 3"
                 />
               ) : null}
-              {segmentsBySeries.map((segments, seriesIndex) =>
-                segments.map((segment, segmentIndex) =>
+              {segmentsBySeries.map((segments, seriesIndex) => {
+                const item = series[seriesIndex];
+                const color = seriesColorFor(item, seriesIndex);
+                return segments.map((segment, segmentIndex) =>
                   segment.length > 1 ? (
                     <polyline
                       key={`${seriesIndex}-${segmentIndex}`}
@@ -274,8 +295,8 @@ export function PortfolioTrendChart({
                         .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
                         .join(" ")}
                       fill="none"
-                      stroke={seriesColor(seriesIndex)}
-                      strokeWidth={2}
+                      stroke={color}
+                      strokeWidth={item?.total ? 2.5 : 2}
                     />
                   ) : (
                     <circle
@@ -283,11 +304,11 @@ export function PortfolioTrendChart({
                       cx={segment[0]?.x}
                       cy={segment[0]?.y}
                       r={2.5}
-                      fill={seriesColor(seriesIndex)}
+                      fill={color}
                     />
                   ),
-                ),
-              )}
+                );
+              })}
               {annotations.map((annotation) => (
                 <circle
                   key={`extreme-${annotation.seriesIndex}-${annotation.kind}`}
@@ -315,7 +336,7 @@ export function PortfolioTrendChart({
                         cx={active?.x}
                         cy={valueToY(value)}
                         r={3.5}
-                        fill={seriesColor(index)}
+                        fill={seriesColorFor(item, index)}
                         stroke="var(--panel)"
                         strokeWidth={2}
                       />
@@ -355,7 +376,10 @@ export function PortfolioTrendChart({
                 <span className="chart-tooltip-date">{active.label}</span>
                 <div className="chart-tooltip-rows">
                   {activeRows.map((row) => (
-                    <div className="chart-tooltip-row" key={row.id}>
+                    <div
+                      className={`chart-tooltip-row${row.total ? " total" : ""}`}
+                      key={row.id}
+                    >
                       <span
                         className="chart-tooltip-swatch"
                         style={{ background: row.color }}
