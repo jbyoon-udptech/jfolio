@@ -41,16 +41,6 @@ export function AllDashboardSections({
     <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="toolbar">
-          <h2 style={{ margin: 0 }}>포트폴리오별 평가금액</h2>
-          <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
-            기준 통화 {currency}
-          </span>
-        </div>
-        <PortfolioValuationTable summaries={summaries} currency={currency} />
-      </div>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="toolbar">
           <h2 style={{ margin: 0 }}>포트폴리오별 평가금액 추이</h2>
           <div className="pill-row" style={{ marginLeft: "auto" }}>
             {PERIODS.map((option) => (
@@ -74,6 +64,16 @@ export function AllDashboardSections({
             * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
           </div>
         ) : null}
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="toolbar">
+          <h2 style={{ margin: 0 }}>포트폴리오별 평가금액</h2>
+          <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
+            기준 통화 {currency}
+          </span>
+        </div>
+        <PortfolioValuationTable summaries={summaries} currency={currency} />
       </div>
     </>
   );

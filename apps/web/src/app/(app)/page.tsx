@@ -106,51 +106,71 @@ export default async function DashboardPage({
         }
       />
 
-      <div className="grid cols-3" style={{ marginBottom: 16 }}>
-        <div className="card">
-          <div className="metric-label">
-            {selection.isAll ? "종합 평가금액" : "전체 자산 평가금액"}
-          </div>
-          <div className="metric-value">{formatCurrency(dashboard.totalAssetValue, currency)}</div>
-          <div className={`metric-delta ${changeClass(dashboard.dailyChange)}`}>
-            {formatSignedCurrency(dashboard.dailyChange, currency)}{" "}
-            {dashboard.dailyChangeRate === null ? (
-              <span className="muted">(전일 데이터 없음)</span>
-            ) : (
-              <span>({formatPercent(dashboard.dailyChangeRate)})</span>
-            )}
-          </div>
-          {selection.isAll ? (
-            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              {portfolioSummaries.length}개 포트폴리오 합산
+      {/* One compact summary card instead of three: on mobile the three stacked
+          cards pushed the valuation chart below the fold. */}
+      <div className="card metric-summary" style={{ marginBottom: 16 }}>
+        <div className="metric-summary-grid">
+          <div className="metric-summary-item primary">
+            <div className="metric-label">
+              {selection.isAll ? "종합 평가금액" : "전체 자산 평가금액"}
             </div>
-          ) : null}
-        </div>
-        <div className="card">
-          <div className="metric-label">총 매입 원가</div>
-          <div className="metric-value small">
-            {formatCurrency(dashboard.totalCostBasis, currency)}
-          </div>
-          <div className="metric-label" style={{ marginTop: 12 }}>
-            미실현 손익
-          </div>
-          <div className={`metric-value small ${changeClass(dashboard.unrealizedPnL)}`}>
-            {formatCurrency(dashboard.unrealizedPnL, currency)}{" "}
-            <span style={{ fontSize: 13 }}>({formatPercent(dashboard.unrealizedReturn)})</span>
-          </div>
-        </div>
-        <div className="card">
-          <div className="metric-label">데이터 상태</div>
-          <div style={{ margin: "6px 0 12px" }}>
-            <StatusBadge status={dashboard.dataStatus} />
-            {dashboard.unavailableCount > 0 ? (
-              <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
-                평가 불가 {dashboard.unavailableCount}건
-              </span>
+            <div className="metric-value">
+              {formatCurrency(dashboard.totalAssetValue, currency)}
+            </div>
+            <div className={`metric-delta ${changeClass(dashboard.dailyChange)}`}>
+              {formatSignedCurrency(dashboard.dailyChange, currency)}{" "}
+              {dashboard.dailyChangeRate === null ? (
+                <span className="muted">(전일 데이터 없음)</span>
+              ) : (
+                <span>({formatPercent(dashboard.dailyChangeRate)})</span>
+              )}
+            </div>
+            {selection.isAll ? (
+              <div className="metric-summary-note muted">
+                {portfolioSummaries.length}개 포트폴리오 합산
+              </div>
             ) : null}
           </div>
-          <div className="metric-label">마지막 데이터 갱신</div>
-          <div>{formatDateTime(dashboard.lastDataUpdatedAt)}</div>
+
+          <div className="metric-summary-item">
+            <div className="metric-summary-pair">
+              <div className="metric-label">총 매입 원가</div>
+              <div className="metric-value small">
+                {formatCurrency(dashboard.totalCostBasis, currency)}
+              </div>
+            </div>
+            <div className="metric-summary-pair">
+              <div className="metric-label">미실현 손익</div>
+              <div
+                className={`metric-value small ${changeClass(dashboard.unrealizedPnL)}`}
+              >
+                {formatCurrency(dashboard.unrealizedPnL, currency)}{" "}
+                <span className="metric-value-rate">
+                  ({formatPercent(dashboard.unrealizedReturn)})
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="metric-summary-item">
+            <div className="metric-summary-pair">
+              <div className="metric-label">데이터 상태</div>
+              <div className="metric-summary-badge">
+                <StatusBadge status={dashboard.dataStatus} />
+                {dashboard.unavailableCount > 0 ? (
+                  <span className="muted metric-summary-note-inline">
+                    평가 불가 {dashboard.unavailableCount}건
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="metric-summary-pair">
+              <div className="metric-label">마지막 데이터 갱신</div>
+              <div className="metric-summary-value">
+                {formatDateTime(dashboard.lastDataUpdatedAt)}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

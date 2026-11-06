@@ -452,6 +452,113 @@ a {
   }
 }
 
+/* Dashboard summary: the valuation, cost/PnL and data-status groups share one
+   card so the valuation chart stays reachable on mobile. On narrow screens the
+   valuation takes the full first row and the other two groups share the next
+   row instead of collapsing into three stacked cards. */
+.metric-summary-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr;
+  gap: 16px;
+}
+
+.metric-summary-item {
+  min-width: 0;
+}
+
+.metric-summary-item + .metric-summary-item {
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+
+.metric-summary-pair + .metric-summary-pair {
+  margin-top: 12px;
+}
+
+.metric-summary-note {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.metric-value-rate {
+  font-size: 13px;
+}
+
+.metric-summary-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.metric-summary-note-inline {
+  font-size: 12px;
+}
+
+.metric-summary-value {
+  margin-top: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .metric-summary {
+    padding: 14px;
+  }
+
+  .metric-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .metric-summary-item.primary {
+    grid-column: 1 / -1;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* The first secondary group starts a new row, so it has no left divider. */
+  .metric-summary-item.primary + .metric-summary-item {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .metric-summary-item + .metric-summary-item {
+    padding-left: 10px;
+  }
+
+  .metric-summary-item .metric-value {
+    overflow-wrap: anywhere;
+  }
+
+  .metric-summary-item .metric-value.small {
+    font-size: 15px;
+  }
+
+  .metric-summary-item .metric-label {
+    font-size: 11px;
+  }
+
+  .metric-summary-pair + .metric-summary-pair {
+    margin-top: 8px;
+  }
+
+  .metric-summary-note,
+  .metric-summary-note-inline {
+    font-size: 11px;
+  }
+
+  .metric-summary-value {
+    font-size: 11px;
+  }
+
+  .metric-value-rate {
+    font-size: 11px;
+  }
+}
+
 .up {
   color: var(--up);
 }
@@ -1319,6 +1426,11 @@ button.pill {
     order: 2;
     max-width: 100%;
     margin-left: 0;
+  }
+
+  /* The descriptive subtitle only adds scroll distance on mobile. */
+  .page-sub {
+    display: none;
   }
 
   .mobile-nav-backdrop {
