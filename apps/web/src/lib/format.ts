@@ -59,6 +59,26 @@ export function formatPrice(value: number | null | undefined, currency: string):
   return formatCurrency(value, currency, { maximumFractionDigits: digits });
 }
 
+/**
+ * Currency-less amount for compact tables whose header already names the
+ * currency. Uses the currency's minor unit so won totals stay integral.
+ */
+export function formatAmount(
+  value: number | null | undefined,
+  currency: string,
+): string {
+  if (!isFiniteNumber(value)) return EMPTY;
+  const maximumFractionDigits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
+  return formatNumber(value, { maximumFractionDigits });
+}
+
+/** Currency-less price with the same adaptive precision as `formatPrice`. */
+export function formatPriceAmount(value: number | null | undefined): string {
+  if (!isFiniteNumber(value)) return EMPTY;
+  const digits = Math.abs(value) > 0 && Math.abs(value) < 1 ? 6 : 2;
+  return formatNumber(value, { maximumFractionDigits: digits });
+}
+
 export function formatQuantity(value: number | null | undefined): string {
   if (!isFiniteNumber(value)) return EMPTY;
   return formatNumber(value, { maximumFractionDigits: 8 });
@@ -82,6 +102,41 @@ export function formatSignedCurrency(
   if (!isFiniteNumber(value)) return UNAVAILABLE;
   const sign = value > 0 ? "+" : "";
   return `${sign}${formatCurrency(value, currency)}`;
+}
+
+/** Signed price with adaptive precision (small crypto moves stay visible). */
+export function formatSignedPrice(
+  value: number | null | undefined,
+  currency: string,
+): string {
+  if (!isFiniteNumber(value)) return UNAVAILABLE;
+  if (!isIsoCurrency(currency)) {
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${formatPrice(value, currency)}`;
+  }
+  // Fiat changes use the currency's minor unit; this also hides float noise
+  // such as 0.999995 from provider price subtraction.
+  const digits = ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
+  const rounded = Number(value.toFixed(digits));
+  const normalized = rounded === 0 ? 0 : rounded;
+  const sign = normalized > 0 ? "+" : "";
+  return `${sign}${formatCurrency(normalized, currency)}`;
+}
+
+const ISO_CURRENCIES = new Map<string, boolean>();
+
+/** `Intl` rejects non-ISO codes such as USDT, which need adaptive precision. */
+function isIsoCurrency(currency: string): boolean {
+  const cached = ISO_CURRENCIES.get(currency);
+  if (cached !== undefined) return cached;
+  let supported = true;
+  try {
+    new Intl.NumberFormat("ko-KR", { style: "currency", currency }).format(0);
+  } catch {
+    supported = false;
+  }
+  ISO_CURRENCIES.set(currency, supported);
+  return supported;
 }
 
 function toDate(value: string | Date | null | undefined): Date | null {

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
 import { AllDashboardSections } from "@/components/AllDashboardSections";
 import { AllocationList } from "@/components/AllocationList";
+import { AssetDailyChangeTable } from "@/components/AssetDailyChangeTable";
 import { DashboardHoldingsTable } from "@/components/DashboardHoldingsTable";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
@@ -65,15 +66,20 @@ export default async function DashboardPage({
     : selection.portfolioId
       ? `&portfolioId=${encodeURIComponent(selection.portfolioId)}`
       : "";
-  const historyResult = await safe(() =>
-    api.dashboardHistory({
-      portfolioId: dashboard.portfolioId,
-      from: range.all ? undefined : range.from.toISOString(),
-      range: range.all ? "ALL" : undefined,
-      to: range.to.toISOString(),
-      interval: range.interval,
-    }),
-  );
+  const [historyResult, assetPricesResult] = await Promise.all([
+    safe(() =>
+      api.dashboardHistory({
+        portfolioId: dashboard.portfolioId,
+        from: range.all ? undefined : range.from.toISOString(),
+        range: range.all ? "ALL" : undefined,
+        to: range.to.toISOString(),
+        interval: range.interval,
+      }),
+    ),
+    selection.isAll
+      ? Promise.resolve(null)
+      : safe(() => api.assetDailyPrices(dashboard.portfolioId, { days: 30 })),
+  ]);
   const points = historyResult.data?.items ?? [];
   const historySeries = historyResult.data?.series ?? [];
 
@@ -185,28 +191,44 @@ export default async function DashboardPage({
           interval={range.interval}
         />
       ) : (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="toolbar">
-            <h2 style={{ margin: 0 }}>자산 평가금액 추이</h2>
-            <div className="pill-row" style={{ marginLeft: "auto" }}>
-              {PERIODS.map((option) => (
-                <Link
-                  key={option}
-                  href={`/?period=${option}${portfolioQuery}`}
-                  className={`pill ${option === period ? "active" : ""}`}
-                >
-                  {option}
-                </Link>
-              ))}
+        <>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="toolbar">
+              <h2 style={{ margin: 0 }}>자산 평가금액 추이</h2>
+              <div className="pill-row" style={{ marginLeft: "auto" }}>
+                {PERIODS.map((option) => (
+                  <Link
+                    key={option}
+                    href={`/?period=${option}${portfolioQuery}`}
+                    className={`pill ${option === period ? "active" : ""}`}
+                  >
+                    {option}
+                  </Link>
+                ))}
+              </div>
             </div>
+            <LineChart points={points} currency={currency} interval={range.interval} />
+            {points.some((p) => p.totalAssetValue === null) ? (
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
+              </div>
+            ) : null}
           </div>
-          <LineChart points={points} currency={currency} interval={range.interval} />
-          {points.some((p) => p.totalAssetValue === null) ? (
-            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-              * 누락 구간은 보간하지 않고 선이 끊어져 표시됩니다.
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="toolbar">
+              <h2 style={{ margin: 0 }}>일별 자산 변화</h2>
+              <span className="muted asset-daily-caption">
+                최근 30일 · 전일 대비(%) · 합계 현금 포함
+              </span>
             </div>
-          ) : null}
-        </div>
+            {assetPricesResult?.data ? (
+              <AssetDailyChangeTable history={assetPricesResult.data} />
+            ) : (
+              <div className="empty">일별 가격 데이터를 불러오지 못했습니다.</div>
+            )}
+          </div>
+        </>
       )}
 
       <div className="grid cols-2" style={{ marginBottom: 16 }}>

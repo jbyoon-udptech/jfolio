@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY,
   UNAVAILABLE,
+  formatAmount,
   formatCollectionInterval,
   formatCurrency,
   formatDate,
@@ -11,8 +12,10 @@ import {
   formatNumber,
   formatPercent,
   formatPrice,
+  formatPriceAmount,
   formatQuantity,
   formatSignedCurrency,
+  formatSignedPrice,
   formatWeight,
   toLocalDateTimeInput,
 } from "@/lib/format";
@@ -56,6 +59,16 @@ describe("UI-006 formatting", () => {
     expect(formatSignedCurrency(null, "KRW")).toBe(UNAVAILABLE);
   });
 
+  it("keeps small signed price moves visible with adaptive precision", () => {
+    expect(formatSignedPrice(2500, "KRW").startsWith("+")).toBe(true);
+    expect(formatSignedPrice(-2500, "KRW").startsWith("-")).toBe(true);
+    expect(formatSignedPrice(0.000123, "USDT")).toContain("0.000123");
+    // Float noise above half a cent is rounded to the fiat minor unit.
+    expect(formatSignedPrice(0.999995, "USD")).toContain("1.00");
+    expect(formatSignedPrice(0.000002, "USD")).not.toContain("+");
+    expect(formatSignedPrice(null, "KRW")).toBe(UNAVAILABLE);
+  });
+
   it("formats percent values and keeps a null distinct", () => {
     expect(formatPercent(25)).toBe("+25.00%");
     expect(formatPercent(-5)).toBe("-5.00%");
@@ -74,6 +87,17 @@ describe("UI-006 formatting", () => {
     expect(formatQuantity(null)).toBe(EMPTY);
     // 8 fractional digits maximum for crypto-sized quantities.
     expect(formatQuantity(1.123456789)).toBe("1.12345679");
+  });
+
+  it("drops the repeated currency symbol in compact tables", () => {
+    expect(formatPriceAmount(1_264_000)).toBe("1,264,000");
+    expect(formatPriceAmount(0.000123)).toBe("0.000123");
+    expect(formatPriceAmount(0)).toBe("0");
+    expect(formatPriceAmount(null)).toBe(EMPTY);
+    expect(formatAmount(1_234_567.89, "KRW")).toBe("1,234,568");
+    expect(formatAmount(1234.56, "USD")).toBe("1,234.56");
+    expect(formatAmount(0, "KRW")).toBe("0");
+    expect(formatAmount(null, "USD")).toBe(EMPTY);
   });
 
   it("formats date-times in the configured time zone (Asia/Seoul)", () => {

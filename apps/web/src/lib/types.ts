@@ -197,6 +197,42 @@ export interface PortfolioHistorySeries {
   items: HistoryPoint[];
 }
 
+export interface AssetDailyPricePoint {
+  asOf: string;
+  price: number | null;
+  change: number | null;
+  changeRate: number | null;
+}
+
+export interface AssetDailyPriceSeries {
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  assetType: string;
+  currency: string;
+  /** Aligned with `AssetDailyPriceHistory.dates`. */
+  points: AssetDailyPricePoint[];
+}
+
+export interface AssetDailyTotal {
+  totalAssetValue: number | null;
+  changeRate: number | null;
+}
+
+export interface AssetDailyPriceHistory {
+  portfolioId: string;
+  /** Portfolio base currency used by `totals`. */
+  baseCurrency: string;
+  from: string;
+  to: string;
+  /** Days with at least one quote, newest first. */
+  dates: string[];
+  /** One series per non-cash holding, sorted by symbol. */
+  series: AssetDailyPriceSeries[];
+  /** Daily portfolio total (including cash), aligned with `dates`. */
+  totals: AssetDailyTotal[];
+}
+
 export interface PortfolioSnapshot {
   snapshotId: string;
   portfolioId: string;

@@ -110,6 +110,51 @@ export interface ValuedPosition {
   statusReason?: string;
 }
 
+/** One day's close for a held asset, with the move vs the previous close. */
+export interface AssetDailyPricePoint {
+  /** UTC day the quote belongs to (start of day). */
+  asOf: Date;
+  price: number | null;
+  /** Absolute price change vs the previous available daily close, in `currency`. */
+  change: number | null;
+  /** Percentage change vs the previous available daily close (e.g. -1.25). */
+  changeRate: number | null;
+}
+
+export interface AssetDailyPriceSeries {
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  assetType: string;
+  /** Native quote currency for `price` and `change`. */
+  currency: string;
+  /** Aligned with `AssetDailyPriceHistory.dates`. */
+  points: AssetDailyPricePoint[];
+}
+
+/** Daily portfolio total in the base currency, aligned with `dates`. */
+export interface AssetDailyTotal {
+  totalAssetValue: number | null;
+  /** Percentage change vs the previous available daily total. */
+  changeRate: number | null;
+}
+
+export interface AssetDailyPriceHistory {
+  portfolioId: string;
+  /** Portfolio base currency used by `totals`. */
+  baseCurrency: string;
+  /** First displayed day (inclusive). */
+  from: Date;
+  /** Last displayed day (inclusive). */
+  to: Date;
+  /** Days with at least one quote, newest first. */
+  dates: Date[];
+  /** One series per non-cash holding, sorted by symbol. */
+  series: AssetDailyPriceSeries[];
+  /** Daily portfolio total (including cash), aligned with `dates`. */
+  totals: AssetDailyTotal[];
+}
+
 export interface PortfolioSnapshot {
   snapshotId: string;
   portfolioId: string;

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { AuthUser, MeResponse } from "@jfolio/shared";
 import type {
+  AssetDailyPriceHistory,
   Dashboard,
   HistoryPoint,
   Instrument,
@@ -181,6 +182,8 @@ export const api = {
       to: string;
       items: HistoryPoint[];
     }>(`/portfolios/${id}/history${query(params)}`),
+  assetDailyPrices: (id: string, params: { days?: number } = {}) =>
+    request<AssetDailyPriceHistory>(`/portfolios/${id}/asset-prices${query(params)}`),
   snapshots: (id: string) =>
     request<ListResponse<PortfolioSnapshot>>(`/portfolios/${id}/snapshots`),
 

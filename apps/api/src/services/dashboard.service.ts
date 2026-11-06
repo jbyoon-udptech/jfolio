@@ -1,15 +1,20 @@
 import {
   ALL_PORTFOLIOS_ID,
+  type AssetDailyPriceHistory,
   type DataStatus,
   type Portfolio,
   type SignalEvent,
   type ValuedPosition,
 } from "@jfolio/shared";
+import { buildDailyPricePoints, buildDailyTotalPoints, collectDailyCloses } from "../domain/asset-price-history";
+import { floorToInterval } from "../domain/intervals";
 import { add, divide, multiply, round, subtract } from "../domain/money";
 import type { Repositories } from "../repositories/types";
 import { ValuationService, type ValuationResult } from "./valuation.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** The dashboard table only ever shows a month of daily closes. */
+export const MAX_ASSET_PRICE_DAYS = 30;
 
 export interface AllocationSlice {
   key: string;
@@ -217,6 +222,98 @@ export class DashboardService {
         name: portfolio.name,
         items: series[index] ?? [],
       })),
+    };
+  }
+
+  /**
+   * UI-001: compact per-asset daily closes for the individual dashboard. Only
+   * currently held, non-cash assets are included. The window is capped at one
+   * month and uses stored quotes only; today's row falls back to the latest
+   * stored observation while the daily bar is still forming.
+   */
+  async getAssetDailyPrices(
+    portfolioId: string,
+    options: { days?: number; to?: Date } = {},
+  ): Promise<AssetDailyPriceHistory> {
+    const days = Math.max(
+      1,
+      Math.min(MAX_ASSET_PRICE_DAYS, Math.floor(options.days ?? MAX_ASSET_PRICE_DAYS)),
+    );
+    const to = options.to ?? this.now();
+    const toDay = floorToInterval(to, "1d");
+    const from = new Date(toDay.getTime() - (days - 1) * DAY_MS);
+    // A short buffer gives the oldest displayed day a previous close even
+    // across weekends and short holidays; only `from..to` becomes table rows.
+    const fetchFrom = new Date(from.getTime() - 7 * DAY_MS);
+
+    // Daily totals are valued at the end of each UTC day so a row uses that
+    // day's close (today's future end-of-day resolves to the latest quote).
+    const firstTotalDay = new Date(fetchFrom.getTime() + DAY_MS - 1);
+    const lastTotalDay = new Date(toDay.getTime() + DAY_MS - 1);
+    const [valuation, totalHistory] = await Promise.all([
+      this.valuation.valuate(portfolioId, { asOf: to }),
+      this.valuation.historySeries(portfolioId, {
+        from: firstTotalDay,
+        to: lastTotalDay,
+        interval: "daily",
+      }),
+    ]);
+    const positions = valuation.positions
+      .filter((position) => position.assetType !== "CASH" && position.quantity !== 0)
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+    const latestQuotes = await this.repos.quotes.getLatestMany(
+      positions.map((position) => position.instrumentId),
+    );
+    const series = await Promise.all(
+      positions.map(async (position) => {
+        const quotes = await this.repos.quotes.getHistorical(position.instrumentId, {
+          interval: "1d",
+          from: fetchFrom,
+          to,
+        });
+        const latest = latestQuotes.get(position.instrumentId);
+        const closes = collectDailyCloses([...quotes, ...(latest ? [latest] : [])]);
+        // The quote currency can differ from the instrument's nominal currency
+        // (for example a stablecoin quote), so prefer what was actually stored.
+        const currency = latest?.currency ?? quotes[0]?.currency ?? position.currency;
+        return { position, closes, currency };
+      }),
+    );
+
+    // Only days with data for at least one asset become rows. This keeps a
+    // stock-only portfolio from showing blank weekend rows.
+    const datesByDay = new Map<number, Date>();
+    for (const { closes } of series) {
+      for (const day of closes.keys()) {
+        if (day >= from.getTime() && day <= toDay.getTime()) {
+          datesByDay.set(day, new Date(day));
+        }
+      }
+    }
+    const dates = [...datesByDay.values()].sort((a, b) => b.getTime() - a.getTime());
+
+    return {
+      portfolioId,
+      baseCurrency: valuation.baseCurrency,
+      from,
+      to: toDay,
+      dates,
+      series: series.map(({ position, closes, currency }) => ({
+        instrumentId: position.instrumentId,
+        symbol: position.symbol,
+        name: position.name,
+        assetType: position.assetType,
+        currency,
+        points: buildDailyPricePoints(closes, dates),
+      })),
+      totals: buildDailyTotalPoints(
+        totalHistory.map((point) => ({
+          timestamp: point.asOf,
+          totalAssetValue: point.totalAssetValue,
+        })),
+        dates,
+      ),
     };
   }
 

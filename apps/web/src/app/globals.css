@@ -707,6 +707,98 @@ th.num {
   letter-spacing: 0.03em;
 }
 
+/* Individual dashboard: dates are rows and assets are columns. The date column
+   and the portfolio total stay pinned while many asset columns scroll
+   horizontally, and the card is capped to a handful of rows so it never
+   dominates the page. Padding is tighter than the generic tables because the
+   header now carries asset names rather than short symbols. */
+.asset-daily-scroll {
+  --table-head-height: 36px;
+  --table-row-height: 42px;
+  --table-visible-rows: 8;
+  max-height: calc(var(--table-head-height) + var(--table-row-height) * var(--table-visible-rows));
+}
+
+.asset-daily-table th,
+.asset-daily-table td {
+  padding: 5px 6px;
+}
+
+.asset-daily-table th {
+  font-size: 11px;
+}
+
+.asset-daily-table td {
+  font-size: 12px;
+}
+
+.asset-daily-table th:first-child,
+.asset-daily-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+.asset-daily-table th:last-child,
+.asset-daily-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+
+.asset-daily-table thead th:first-child,
+.asset-daily-table thead th:last-child {
+  z-index: 2;
+}
+
+.asset-daily-table tbody tr:hover td:first-child,
+.asset-daily-table tbody tr:hover td:last-child {
+  background: var(--panel-2);
+}
+
+.asset-daily-table .asset-daily-name {
+  display: block;
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-daily-table th .asset-daily-currency {
+  display: block;
+  margin-top: 1px;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.asset-daily-table .asset-daily-date {
+  font-size: 11px;
+}
+
+.asset-daily-table .asset-daily-change {
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.asset-daily-table .asset-daily-total {
+  font-weight: 600;
+}
+
+.asset-daily-caption {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .asset-daily-scroll {
+    --table-visible-rows: 6;
+  }
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;

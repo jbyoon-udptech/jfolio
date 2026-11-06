@@ -255,6 +255,7 @@ Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
 | GET | `/api/v1/portfolios/:id/holdings` | 보유 자산 평가 |
 | GET | `/api/v1/portfolios/:id/valuation` | 평가금액 (`asOf`, `baseCurrency`) |
 | GET | `/api/v1/portfolios/:id/history` | 과거 평가 시계열 (`from`, `to`, `interval`) |
+| GET | `/api/v1/portfolios/:id/asset-prices` | 보유 자산별 일별 가격·등락률·일별 자산합계 (`days`, 기본 30·최대 30) |
 | GET | `/api/v1/portfolios/:id/snapshots` | 스냅샷 조회 (`snapshotType`, `from`, `to`, `limit`) |
 | POST | `/api/v1/portfolios/:id/snapshots` | 온디맨드 스냅샷 생성 (`snapshotType`, `asOf`, `baseCurrency`) |
 
@@ -273,6 +274,22 @@ Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
 `dailyChangeRate` 는 최신가와 직전 일봉 종가의 등락률(%p)이며 직전 종가가 없으면
 `null` 입니다. 가격/환율을 해석할 수 없는 포지션은 `status: "UNAVAILABLE"` 이며
 합계에서 제외됩니다.
+
+`/asset-prices` 는 보유 중인 비현금 자산별로 최근 `days`(기본 30, 최대 30)일의
+일별 종가와 직전 가용 종가 대비 등락률을 반환합니다. `dates` 는 시세가 있는
+날짜만 최신순으로 포함하며, 각 `series[].points` 는 `dates` 와 같은 순서로
+정렬됩니다. 각 포인트의 `price` 는 해당 자산의 통화, `change` 는 절대 가격
+변화량, `changeRate` 는 직전 가용 일별 종가 대비 변화율(%p)입니다. 시세가 없는
+날짜의 `price`/`change`/`changeRate` 는 `null` 이고, 첫 가용 종가처럼 직전
+종가가 없는 경우에도 `changeRate` 는 `null` 입니다. 당일 행은 일봉이 아직
+완성되지 않았을 수 있으므로 저장된 최신 시세를 사용합니다. 현금성 자산과
+수량이 0인 자산은 `series` 에서 제외됩니다.
+
+응답의 `baseCurrency` 는 `totals` 의 통화이며, `totals` 는 `dates` 와 같은
+순서로 정렬된 일별 포트폴리오 합계입니다. 합계는 현금을 포함하고 각 날짜의
+종가(당일은 저장된 최신 시세)로 평가하며, `changeRate` 는 직전 가용 일별
+합계 대비 변화율(%p)입니다. 합계를 평가할 수 없거나 직전 합계가 없으면
+`totalAssetValue`/`changeRate` 는 `0` 이 아니라 `null` 입니다.
 
 `snapshotType` 값: `INTRADAY | DAILY | ON_DEMAND`.
 

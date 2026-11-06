@@ -24,6 +24,11 @@ const snapshotsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(2000).optional(),
 });
 
+const assetPricesQuery = z.object({
+  // The dashboard table only ever needs a month of daily closes.
+  days: z.coerce.number().int().min(1).max(30).optional().default(30),
+});
+
 const createSnapshotBody = z.object({
   snapshotType: snapshotTypeSchema.optional().default("ON_DEMAND"),
   asOf: z.string().datetime({ offset: true }).optional(),
@@ -126,6 +131,19 @@ export function createPortfoliosRouter(container: Container): Router {
         interval: query.interval,
       });
       res.json({ portfolioId: id, interval: query.interval, from, to, items: points });
+    }),
+  );
+
+  router.get(
+    "/:id/asset-prices",
+    asyncHandler(async (req, res) => {
+      const id = pathParam(req, "id");
+      await requirePortfolio(container, id);
+      const query = parseQuery(assetPricesQuery, req.query);
+      const result = await container.dashboard.getAssetDailyPrices(id, {
+        days: query.days,
+      });
+      res.json(result);
     }),
   );
 

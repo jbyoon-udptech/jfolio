@@ -531,6 +531,151 @@ describe("8.4 portfolios", () => {
     expect(res.status).toBe(200);
     expect(res.body.items.length).toBeGreaterThan(0);
   });
+
+  it("returns one month of daily prices, rates and portfolio totals", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({
+      name: "Daily Prices",
+      baseCurrency: "KRW",
+    });
+    const a = await createInstrument(container, {
+      symbol: "AAA",
+      name: "Asset A",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const b = await createInstrument(container, {
+      symbol: "BBB",
+      name: "Asset B",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
+    const cash = await createInstrument(container, {
+      symbol: "KRW",
+      name: "Korean Won",
+      assetType: "CASH",
+      market: "CASH",
+      currency: "KRW",
+      providers: [],
+    });
+    const heldSince = new Date(FIXED_NOW.getTime() - 10 * 86_400_000);
+
+    for (const [instrument, quantity, price] of [
+      [a, 10, 80],
+      [b, 5, 40],
+    ] as const) {
+      await container.transactions.create({
+        portfolioId: portfolio.portfolioId,
+        instrumentId: instrument.instrumentId,
+        type: "BUY",
+        timestamp: heldSince,
+        quantity,
+        price,
+        currency: "KRW",
+        fee: 0,
+      });
+    }
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: cash.instrumentId,
+      type: "DEPOSIT",
+      timestamp: heldSince,
+      quantity: 1000,
+      price: 1,
+      currency: "KRW",
+      fee: 0,
+    });
+
+    const daily = (instrument: typeof a, price: number, day: string) =>
+      container.marketData.storeQuote(
+        instrument,
+        makeQuote(instrument, price, {
+          timestamp: new Date(`${day}T00:00:00.000Z`),
+          interval: "1d",
+        }),
+      );
+    await daily(a, 100, "2026-10-10");
+    await daily(a, 110, "2026-10-11");
+    await daily(a, 99, "2026-10-12");
+    // Older than the requested window: used for nothing at all.
+    await daily(a, 50, "2026-09-01");
+    await daily(b, 50, "2026-10-11");
+    // Today's daily bar is still forming, so the latest tick is the true row.
+    await container.marketData.storeQuote(b, makeQuote(b, 55));
+
+    const res = await request(app).get(
+      `${BASE}/portfolios/${portfolio.portfolioId}/asset-prices?days=30`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.from).toBe("2026-09-17T00:00:00.000Z");
+    expect(res.body.to).toBe("2026-10-16T00:00:00.000Z");
+    expect(res.body.dates).toEqual([
+      "2026-10-16T00:00:00.000Z",
+      "2026-10-12T00:00:00.000Z",
+      "2026-10-11T00:00:00.000Z",
+      "2026-10-10T00:00:00.000Z",
+    ]);
+    expect(res.body.series.map((series: { symbol: string }) => series.symbol)).toEqual([
+      "AAA",
+      "BBB",
+    ]);
+    expect(res.body.baseCurrency).toBe("KRW");
+    expect(res.body.totals).toHaveLength(res.body.dates.length);
+    // Totals include the 1,000 KRW cash balance: 10 × 99 + 5 × 55 + 1,000,
+    // then 10 × 99 + 5 × 50 + 1,000, then 10 × 110 + 5 × 50 + 1,000.
+    expect(
+      res.body.totals.map((total: { totalAssetValue: number | null }) => total.totalAssetValue),
+    ).toEqual([2265, 2240, 2350, null]);
+    expect(res.body.totals[0].changeRate).toBeCloseTo(1.1161, 4);
+    expect(res.body.totals[1].changeRate).toBeCloseTo(-4.6809, 4);
+    // The previous day's total is unavailable, so no rate is fabricated.
+    expect(res.body.totals[2].changeRate).toBeNull();
+    expect(res.body.totals[3]).toMatchObject({
+      totalAssetValue: null,
+      changeRate: null,
+    });
+
+    const aaa = res.body.series[0];
+    expect(aaa.points[0]).toMatchObject({ price: null, change: null, changeRate: null });
+    expect(aaa.points[1]).toMatchObject({ price: 99, change: -11, changeRate: -10 });
+    expect(aaa.points[2]).toMatchObject({ price: 110, change: 10, changeRate: 10 });
+    expect(aaa.points[3]).toMatchObject({ price: 100, change: null, changeRate: null });
+
+    const bbb = res.body.series[1];
+    expect(bbb.points[0]).toMatchObject({ price: 55, change: 5, changeRate: 10 });
+    expect(bbb.points[1]).toMatchObject({ price: null, change: null, changeRate: null });
+    expect(bbb.points[2]).toMatchObject({ price: 50, change: null, changeRate: null });
+    expect(bbb.points[3]).toMatchObject({ price: null, change: null, changeRate: null });
+  });
+
+  it("rejects an asset price window longer than one month", async () => {
+    const { container } = createTestContext();
+    const app = appFor(container);
+    const portfolio = await container.portfolios.create({
+      name: "Window",
+      baseCurrency: "KRW",
+    });
+
+    const res = await request(app).get(
+      `${BASE}/portfolios/${portfolio.portfolioId}/asset-prices?days=31`,
+    );
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 404 for asset prices of a missing portfolio", async () => {
+    const { container } = createTestContext();
+    const res = await request(appFor(container)).get(
+      `${BASE}/portfolios/pf_missing/asset-prices`,
+    );
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("8.5 transactions", () => {
