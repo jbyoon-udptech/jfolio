@@ -1,3 +1,4 @@
+import { splitAssetLabel } from "@/lib/asset-label";
 import {
   EMPTY,
   formatAmount,
@@ -28,17 +29,40 @@ export function AssetDailyChangeTable({ history }: { history: AssetDailyPriceHis
         <thead>
           <tr>
             <th>날짜</th>
-            {history.series.map((asset) => (
-              <th
-                key={asset.instrumentId}
-                className="num"
-                title={`${asset.name} (${asset.symbol})`}
-                aria-label={`${asset.name} (${asset.symbol})`}
-              >
-                <span className="asset-daily-name">{asset.name}</span>
-                <span className="asset-daily-currency">{asset.currency}</span>
-              </th>
-            ))}
+            {history.series.map((asset, index) => {
+              const label = splitAssetLabel(asset.name);
+              const labelText = `${asset.name} (${asset.symbol})`;
+              return (
+                <th
+                  key={asset.instrumentId}
+                  className="num asset-daily-head"
+                  aria-label={labelText}
+                  tabIndex={label.truncated ? 0 : undefined}
+                >
+                  <span className="asset-daily-name">
+                    <span className="asset-daily-name-head">
+                      {label.head}
+                      {label.separator ? " " : null}
+                    </span>
+                    {label.tail ? (
+                      <span className="asset-daily-name-tail">{label.tail}</span>
+                    ) : null}
+                  </span>
+                  <span className="asset-daily-currency">{asset.currency}</span>
+                  {label.truncated ? (
+                    <span
+                      className={`asset-daily-tooltip asset-daily-tooltip-${tooltipAlign(index, history.series.length)}`}
+                      aria-hidden="true"
+                    >
+                      <span className="asset-daily-tooltip-name">{asset.name}</span>
+                      <span className="asset-daily-tooltip-meta">
+                        {asset.symbol} · {asset.currency}
+                      </span>
+                    </span>
+                  ) : null}
+                </th>
+              );
+            })}
             <th
               className="num asset-daily-total-head"
               title="현금 포함 일별 자산합계"
@@ -97,4 +121,15 @@ function changeClass(value: number | null): string {
   if (value > 0) return "up";
   if (value < 0) return "down";
   return "";
+}
+
+/**
+ * Keep the tooltip inside the horizontally scrolling card: pin the first and
+ * last columns to the corresponding edge instead of centering over them.
+ */
+function tooltipAlign(index: number, count: number): "start" | "center" | "end" {
+  const edge = 2;
+  if (index < edge && index < count - edge) return "start";
+  if (index >= count - edge && index >= edge) return "end";
+  return "center";
 }

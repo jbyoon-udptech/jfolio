@@ -759,11 +759,100 @@ th.num {
   background: var(--panel-2);
 }
 
+/* Long names keep their head and tail: the head shrinks with an ellipsis while
+   the tail (a share class such as TR or (H)) stays visible. */
 .asset-daily-table .asset-daily-name {
-  display: block;
-  max-width: 68px;
+  display: inline-flex;
+  max-width: 80px;
+  min-width: 0;
+  justify-content: flex-end;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.asset-daily-table .asset-daily-name-head {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Keep the optional separator space at the end of the head. It is clipped
+     with the head when the head ellipsizes, and survives when the head fits. */
+  white-space: pre;
+}
+
+.asset-daily-table .asset-daily-name-tail {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Only truncated headers are focusable so the full name can be revealed
+   without adding a tab stop for every short asset name. */
+.asset-daily-table th.asset-daily-head[tabindex] {
+  cursor: help;
+}
+
+.asset-daily-table th.asset-daily-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.asset-daily-table th.asset-daily-head:hover,
+.asset-daily-table th.asset-daily-head:focus {
+  z-index: 6;
+}
+
+.asset-daily-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 7;
+  /* With only `left` set, shrink-to-fit uses the narrow header as the
+     available width and wraps every few characters. */
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 9px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
+/* Pin tooltips on the first/last columns to the card edge so the horizontal
+   scroll container is less likely to clip them. */
+.asset-daily-tooltip-start {
+  left: 0;
+  transform: none;
+}
+
+.asset-daily-tooltip-end {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.asset-daily-table th.asset-daily-head:hover .asset-daily-tooltip,
+.asset-daily-table th.asset-daily-head:focus .asset-daily-tooltip {
+  display: block;
+}
+
+.asset-daily-tooltip-name {
+  display: block;
+}
+
+.asset-daily-tooltip-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .asset-daily-table th .asset-daily-currency {
