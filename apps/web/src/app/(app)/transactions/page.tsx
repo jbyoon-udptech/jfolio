@@ -80,6 +80,8 @@ export default async function TransactionsPage({
       options: group.items.map((i) => ({
         value: i.instrumentId,
         label: `${i.name} (${i.symbol})`,
+        currency: i.currency,
+        assetType: i.assetType,
       })),
     }),
   );
@@ -119,7 +121,7 @@ export default async function TransactionsPage({
         <TransactionForm
           portfolios={portfolioOptions}
           instruments={instrumentGroups}
-          defaultPortfolioId={selection.portfolioId}
+          selectedPortfolioId={currentPortfolioId}
         />
       ) : (
         <div className="notice" style={{ marginBottom: 16 }}>
