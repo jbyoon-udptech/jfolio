@@ -9,6 +9,7 @@ import {
   formatCurrency,
   formatPercent,
   formatPrice,
+  formatQuantity,
 } from "@/lib/format";
 import type { ValuedPosition } from "@/lib/types";
 
@@ -94,6 +95,7 @@ export function DashboardHoldingsTable({
               <thead>
                 <tr>
                   <th>종목</th>
+                  <th className="num">보유수량</th>
                   <th className="num">
                     <span className="th-main">평가금액</span>
                     <span className="th-sub">현재가</span>
@@ -113,6 +115,7 @@ export function DashboardHoldingsTable({
                       </Link>
                       <div className="cell-sub muted">{holding.symbol}</div>
                     </td>
+                    <td className="num">{formatQuantity(holding.quantity)}</td>
                     <td className="num">
                       {holding.marketValueBase === null
                         ? UNAVAILABLE
