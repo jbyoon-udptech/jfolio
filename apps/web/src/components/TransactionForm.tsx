@@ -6,7 +6,13 @@ import { apiFetch } from "@/lib/client-fetch";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toLocalDateTimeInput } from "@/lib/format";
-import { findCashOptions, netSaleProceeds } from "@/lib/cash-settlement";
+import {
+  buildPurchaseWithdrawal,
+  buildSaleDeposit,
+  findCashOptions,
+  grossPurchaseCost,
+  netSaleProceeds,
+} from "@/lib/cash-settlement";
 import {
   CashDepositPrompt,
   type CashDepositPromptProps,
@@ -61,9 +67,21 @@ export function TransactionForm({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<Settlement | null>(null);
+  // Controlled so the sell-only "deposit proceeds now" option can follow the
+  // selected type and instrument before the form is submitted.
+  const [type, setType] = useState("BUY");
+  const [instrumentId, setInstrumentId] = useState("");
   // Bumping this remounts the uncontrolled fields after a successful submit
   // without touching the read-only portfolio field.
   const [formVersion, setFormVersion] = useState(0);
+
+  const instrumentOptions = instruments.flatMap((group) => group.options);
+  const selectedInstrument = instrumentOptions.find(
+    (option) => option.value === instrumentId,
+  );
+  const cashOption = selectedInstrument?.currency
+    ? findCashOptions(instrumentOptions, selectedInstrument.currency)[0]
+    : undefined;
 
   // The page-level selector is the single source of truth: keep this field
   // read-only so the form can never diverge from the ledger view beside it.
@@ -101,32 +119,44 @@ export function TransactionForm({
       fee: Number(data.get("fee") ?? 0),
       memo: (data.get("memo") as string) || null,
     };
+    // Only rendered for BUY/SELL, and disabled when no matching cash asset exists.
+    const settleCash =
+      (body.type === "BUY" || body.type === "SELL") &&
+      data.get("settleCash") === "on";
 
     try {
-      const res = await apiFetch("/api/transactions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as
-          | { error?: { message?: string } }
-          | null;
-        throw new Error(payload?.error?.message ?? `요청 실패 (${res.status})`);
-      }
+      await postTransaction(body);
       setFormVersion((version) => version + 1);
-      setMessage("거래가 등록되었습니다.");
+      setType("BUY");
+      setInstrumentId("");
       router.refresh();
 
-      // A SELL never moves cash by itself: offer the matching DEPOSIT instead of
-      // silently creating a second transaction the user did not ask for.
-      const instrumentOptions = instruments.flatMap((group) => group.options);
+      // A trade never moves cash by itself: either create the matching
+      // DEPOSIT/WITHDRAWAL right away (the opt-in checkbox) or, for a SELL,
+      // offer it as a follow-up form.
       const instrument = instrumentOptions.find(
         (option) => option.value === body.instrumentId,
       );
-      const amount = netSaleProceeds(body.quantity, body.price, body.fee);
-      if (body.type === "SELL" && instrument?.currency && amount > 0) {
-        setSettlement({
+      if (body.type !== "SELL" && body.type !== "BUY") {
+        setMessage("거래가 등록되었습니다.");
+        return;
+      }
+      if (!instrument?.currency) {
+        setMessage("거래가 등록되었습니다.");
+        return;
+      }
+
+      const cashOptions = findCashOptions(instrumentOptions, instrument.currency);
+      const cash = settleCash ? cashOptions[0] : undefined;
+
+      if (body.type === "SELL") {
+        const amount = netSaleProceeds(body.quantity, body.price, body.fee);
+        if (amount <= 0) {
+          setMessage("거래가 등록되었습니다.");
+          return;
+        }
+
+        const settlementProps: Settlement = {
           portfolioId: body.portfolioId,
           portfolioLabel:
             portfolios.find((option) => option.value === body.portfolioId)?.label ??
@@ -138,8 +168,66 @@ export function TransactionForm({
           fee: body.fee,
           amount,
           timestamp: body.timestamp,
-          cashOptions: findCashOptions(instrumentOptions, instrument.currency),
-        });
+          cashOptions,
+        };
+        if (!cash) {
+          setSettlement(settlementProps);
+          setMessage("거래가 등록되었습니다.");
+          return;
+        }
+
+        try {
+          await postTransaction(
+            buildSaleDeposit({
+              portfolioId: body.portfolioId,
+              cashInstrumentId: cash.value,
+              amount,
+              timestamp: body.timestamp,
+              memo: `${instrument.label} 매도 대금`,
+            }),
+          );
+          setMessage("거래가 등록되고 매도 대금이 현금으로 입금되었습니다.");
+        } catch (depositErr) {
+          // The SELL itself succeeded, so surface the failure without losing it
+          // and fall back to the manual prompt the user can retry.
+          setMessage("거래가 등록되었습니다.");
+          setError(
+            `매도 대금 입금 실패: ${
+              depositErr instanceof Error ? depositErr.message : "알 수 없는 오류"
+            }`,
+          );
+          setSettlement(settlementProps);
+        }
+        return;
+      }
+
+      // BUY fees are part of the cost basis, so the withdrawal covers them.
+      const cost = grossPurchaseCost(body.quantity, body.price, body.fee);
+      if (cost <= 0 || !cash) {
+        setMessage("거래가 등록되었습니다.");
+        return;
+      }
+
+      try {
+        await postTransaction(
+          buildPurchaseWithdrawal({
+            portfolioId: body.portfolioId,
+            cashInstrumentId: cash.value,
+            amount: cost,
+            timestamp: body.timestamp,
+            memo: `${instrument.label} 매수 대금`,
+          }),
+        );
+        setMessage("거래가 등록되고 매수 대금이 현금에서 인출되었습니다.");
+      } catch (withdrawalErr) {
+        // The BUY itself succeeded; tell the user so they can record the
+        // withdrawal manually instead of retrying the purchase.
+        setMessage("거래가 등록되었습니다.");
+        setError(
+          `매수 대금 인출 실패: ${
+            withdrawalErr instanceof Error ? withdrawalErr.message : "알 수 없는 오류"
+          }. 거래 내역에서 WITHDRAWAL 거래를 직접 추가하세요.`,
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "알 수 없는 오류");
@@ -175,7 +263,12 @@ export function TransactionForm({
           </label>
           <label>
             자산
-            <select name="instrumentId" required defaultValue="">
+            <select
+              name="instrumentId"
+              required
+              value={instrumentId}
+              onChange={(event) => setInstrumentId(event.target.value)}
+            >
               <option value="" disabled>
                 선택
               </option>
@@ -192,14 +285,51 @@ export function TransactionForm({
           </label>
           <label>
             유형
-            <select name="type" required defaultValue="BUY">
-              {TRANSACTION_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+            <select
+              name="type"
+              required
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+            >
+              {TRANSACTION_TYPES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
                 </option>
               ))}
             </select>
           </label>
+          {type === "BUY" || type === "SELL" ? (
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  name="settleCash"
+                  style={{ width: "auto" }}
+                  disabled={!cashOption}
+                />
+                {type === "SELL"
+                  ? "매도 대금을 현금으로 바로 입금"
+                  : "매수 대금을 현금에서 바로 인출"}
+              </label>
+              <span className="muted" style={{ fontSize: 12 }}>
+                {cashOption
+                  ? type === "SELL"
+                    ? `${cashOption.label}에 순수령액을 DEPOSIT 거래로 함께 등록합니다.`
+                    : `${cashOption.label}에서 매수 금액(수수료 포함)을 WITHDRAWAL 거래로 함께 등록합니다.`
+                  : selectedInstrument?.currency
+                    ? `${selectedInstrument.currency} 현금 자산이 없어 사용할 수 없습니다.`
+                    : "자산을 선택하면 사용할 수 있습니다."}
+              </span>
+            </div>
+          ) : null}
           <label>
             일시
             <input type="datetime-local" name="timestamp" required defaultValue={localNow()} />
@@ -210,7 +340,7 @@ export function TransactionForm({
           </label>
           <label>
             단가
-            <input type="number" name="price" step="any" defaultValue={0} />
+            <input type="number" name="price" step="any" />
           </label>
           <label>
             수수료
@@ -239,4 +369,19 @@ export function TransactionForm({
 /** `YYYY-MM-DDTHH:mm` in local time, suitable for `datetime-local`. */
 function localNow(): string {
   return toLocalDateTimeInput(new Date());
+}
+
+/** POST a transaction through the Next.js proxy and throw on failure. */
+async function postTransaction(body: unknown): Promise<void> {
+  const res = await apiFetch("/api/transactions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as
+      | { error?: { message?: string } }
+      | null;
+    throw new Error(payload?.error?.message ?? `요청 실패 (${res.status})`);
+  }
 }

@@ -1,9 +1,10 @@
 /**
- * Helpers for the optional "settle a sale into cash" prompt.
+ * Helpers for the optional cash settlement of a trade.
  *
  * Cash is a separate `assetType=CASH` instrument: a SELL only changes the sold
- * instrument's position, so the proceeds reach a cash balance only through a
- * follow-up DEPOSIT. These helpers prepare that DEPOSIT, they never write one on
+ * instrument's position and a BUY only changes the bought position, so cash
+ * moves only through a follow-up DEPOSIT (sale proceeds) or WITHDRAWAL
+ * (purchase cost). These helpers prepare that entry, they never write one on
  * their own.
  */
 
@@ -29,6 +30,71 @@ export function netSaleProceeds(
   const net = quantity * price - (Number.isFinite(fee) ? fee : 0);
   if (!Number.isFinite(net) || net <= 0) return 0;
   return Number(net.toFixed(8));
+}
+
+/**
+ * Gross cash paid for a purchase. Buy fees are part of the cost basis, so the
+ * withdrawal must cover the fee as well as quantity × price. Rounded to avoid
+ * binary-float artefacts in the prefilled form.
+ */
+export function grossPurchaseCost(
+  quantity: number,
+  price: number,
+  fee = 0,
+): number {
+  if (!Number.isFinite(quantity) || !Number.isFinite(price)) return 0;
+  const gross = quantity * price + (Number.isFinite(fee) ? fee : 0);
+  if (!Number.isFinite(gross) || gross <= 0) return 0;
+  return Number(gross.toFixed(8));
+}
+
+export interface CashSettlement {
+  portfolioId: string;
+  instrumentId: string;
+  type: "DEPOSIT" | "WITHDRAWAL";
+  /** ISO timestamp of the trade; the cash entry settles at the same moment. */
+  timestamp: string;
+  /** Cash amount: a CASH instrument is priced at 1. */
+  quantity: number;
+  price: number;
+  fee: number;
+  memo: string | null;
+}
+
+/**
+ * Body for the DEPOSIT/WITHDRAWAL that settles a trade's cash side. The amount
+ * rides in `quantity` because a CASH instrument is priced at 1.
+ */
+export function buildCashSettlement(input: {
+  type: CashSettlement["type"];
+  portfolioId: string;
+  cashInstrumentId: string;
+  amount: number;
+  timestamp: string;
+  memo?: string | null;
+}): CashSettlement {
+  return {
+    portfolioId: input.portfolioId,
+    instrumentId: input.cashInstrumentId,
+    type: input.type,
+    timestamp: input.timestamp,
+    quantity: input.amount,
+    price: 1,
+    fee: 0,
+    memo: input.memo ?? null,
+  };
+}
+
+export function buildSaleDeposit(
+  input: Omit<Parameters<typeof buildCashSettlement>[0], "type">,
+): CashSettlement {
+  return buildCashSettlement({ ...input, type: "DEPOSIT" });
+}
+
+export function buildPurchaseWithdrawal(
+  input: Omit<Parameters<typeof buildCashSettlement>[0], "type">,
+): CashSettlement {
+  return buildCashSettlement({ ...input, type: "WITHDRAWAL" });
 }
 
 /**

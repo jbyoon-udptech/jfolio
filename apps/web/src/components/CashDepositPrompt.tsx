@@ -1,7 +1,10 @@
 "use client";
 
 import { apiFetch } from "@/lib/client-fetch";
-import type { CashSettlementOption } from "@/lib/cash-settlement";
+import {
+  buildSaleDeposit,
+  type CashSettlementOption,
+} from "@/lib/cash-settlement";
 import {
   formatCurrency,
   formatNumber,
@@ -69,18 +72,15 @@ export function CashDepositPrompt({
     setPending(true);
     setError(null);
     const parsedTimestamp = new Date(timestampValue);
-    const body = {
+    const body = buildSaleDeposit({
       portfolioId,
-      instrumentId,
-      type: "DEPOSIT",
+      cashInstrumentId: instrumentId,
+      amount: depositQuantity,
       timestamp: Number.isNaN(parsedTimestamp.getTime())
         ? new Date().toISOString()
         : parsedTimestamp.toISOString(),
-      quantity: depositQuantity,
-      price: 1,
-      fee: 0,
       memo: memo.trim() || null,
-    };
+    });
 
     try {
       const res = await apiFetch("/api/transactions", {
