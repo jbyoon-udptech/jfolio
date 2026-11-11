@@ -79,9 +79,11 @@ There is no CI or pre-commit hook; run lint, typecheck, and tests locally.
 
 - All money math goes through `decimal.js` helpers in
   `apps/api/src/domain/money.ts`; do not use raw JS float arithmetic.
-- Missing FX/invalid valuation is `UNAVAILABLE`/`null`, never `0`, and is
-  excluded from totals (`dailyChange` is `null` when the base valuation is
-  unavailable).
+- Live valuations report missing FX/prices as `UNAVAILABLE` with `null` position
+  values, never a fabricated `0` (`dailyChange` is `null` when the base
+  valuation is unavailable). Historical series differ: a held asset without a
+  stored quote contributes `0` to that point, starting at the portfolio's first
+  transaction, while the point keeps `UNAVAILABLE` in `dataStatus`.
 - `latest_quotes` is a materialized per-instrument collection; never overwrite a
   newer quote with an older/late-arriving one.
 - Deduplication keys: quotes `instrumentId+providerId+interval+timestamp`,

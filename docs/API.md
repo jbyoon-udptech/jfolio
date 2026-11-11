@@ -181,8 +181,9 @@ Query:
 ### `GET /api/v1/dashboard/history`
 
 대시보드 차트용 평가금액 시계열입니다. `portfolioId=all` 이거나 생략하면 숨김
-포트폴리오를 제외한 전체 포트폴리오를 하나의 기준 통화로 합산합니다. 한
-포트폴리오라도 해당 시점 평가가 불가하면 그 시점 값은 `null` 입니다.
+포트폴리오를 제외한 전체 포트폴리오를 하나의 기준 통화로 합산합니다. 시세가
+없는 종목은 그 시점 합계에서 0으로 계산하며, 데이터 불충분 상태는
+`dataStatus` 로 전달합니다. 시계열은 각 포트폴리오의 최초 거래일부터 시작합니다.
 
 `portfolioId=all` 응답에는 포트폴리오별 시계열인 `series` 가 추가됩니다.
 각 항목은 `{ portfolioId, name, items }` 이며, `items` 는 집계 응답의 `items`
@@ -288,8 +289,8 @@ Query: `portfolioId`, `baseCurrency`, `from`, `to`, `interval`
 응답의 `baseCurrency` 는 `totals` 의 통화이며, `totals` 는 `dates` 와 같은
 순서로 정렬된 일별 포트폴리오 합계입니다. 합계는 현금을 포함하고 각 날짜의
 종가(당일은 저장된 최신 시세)로 평가하며, `changeRate` 는 직전 가용 일별
-합계 대비 변화율(%p)입니다. 합계를 평가할 수 없거나 직전 합계가 없으면
-`totalAssetValue`/`changeRate` 는 `0` 이 아니라 `null` 입니다.
+합계 대비 변화율(%p)입니다. 시세가 없는 종목은 그 날짜 합계에서 0으로
+계산하며, 직전 합계가 없으면 `changeRate` 는 `0` 이 아니라 `null` 입니다.
 
 `snapshotType` 값: `INTRADAY | DAILY | ON_DEMAND`.
 

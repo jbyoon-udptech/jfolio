@@ -628,16 +628,17 @@ describe("8.4 portfolios", () => {
     expect(res.body.totals).toHaveLength(res.body.dates.length);
     // Totals include the 1,000 KRW cash balance: 10 × 99 + 5 × 55 + 1,000,
     // then 10 × 99 + 5 × 50 + 1,000, then 10 × 110 + 5 × 50 + 1,000.
+    // On 10-10 asset B has no quote yet, so it contributes 0 to that total.
     expect(
       res.body.totals.map((total: { totalAssetValue: number | null }) => total.totalAssetValue),
-    ).toEqual([2265, 2240, 2350, null]);
+    ).toEqual([2265, 2240, 2350, 2000]);
     expect(res.body.totals[0].changeRate).toBeCloseTo(1.1161, 4);
     expect(res.body.totals[1].changeRate).toBeCloseTo(-4.6809, 4);
-    // The previous day's total is unavailable, so no rate is fabricated.
-    expect(res.body.totals[2].changeRate).toBeNull();
+    // 10-10 is now a finite total (asset B counted as 0), so 10-11 has a rate.
+    expect(res.body.totals[2].changeRate).toBeCloseTo(17.5, 4);
     expect(res.body.totals[3]).toMatchObject({
-      totalAssetValue: null,
-      changeRate: null,
+      totalAssetValue: 2000,
+      changeRate: 33.3333,
     });
 
     const aaa = res.body.series[0];
@@ -1342,7 +1343,7 @@ describe("8.2 dashboard", () => {
     expect(res.body.items[0].totalAssetValue).toBe(1000);
   });
 
-  it("starts ALL dashboard history at the earliest stored quote", async () => {
+  it("starts ALL dashboard history at each portfolio's first transaction", async () => {
     const { container } = createTestContext();
     const app = appFor(container);
     const first = await container.portfolios.create({ name: "First", baseCurrency: "KRW" });
@@ -1369,10 +1370,12 @@ describe("8.2 dashboard", () => {
     older.setUTCHours(0, 0, 0, 0);
     const newer = new Date(FIXED_NOW.getTime() - 10 * 86_400_000);
     newer.setUTCHours(0, 0, 0, 0);
+    // Quotes collected before the ledger starts must not move the axis back.
+    const earlierQuote = new Date(older.getTime() - 30 * 86_400_000);
 
-    for (const [portfolio, instrument, timestamp] of [
-      [first, a, older],
-      [second, b, newer],
+    for (const [portfolio, instrument, timestamp, quoteTimestamp] of [
+      [first, a, older, earlierQuote],
+      [second, b, newer, newer],
     ] as const) {
       await container.transactions.create({
         portfolioId: portfolio.portfolioId,
@@ -1386,7 +1389,7 @@ describe("8.2 dashboard", () => {
       });
       await container.marketData.storeQuote(
         instrument,
-        makeQuote(instrument, 100, { timestamp, interval: "1d" }),
+        makeQuote(instrument, 100, { timestamp: quoteTimestamp, interval: "1d" }),
       );
     }
 

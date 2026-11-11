@@ -312,36 +312,34 @@ export class ValuationService {
 
   /**
    * FR-053: Start of the full ("ALL") history for a portfolio. The series
-   * should begin at the first quote that actually exists for an instrument the
-   * portfolio has ever held, not at an arbitrary one-year lookback. Cash-only
-   * portfolios fall back to their first transaction.
+   * begins at the portfolio's first transaction: quotes collected before the
+   * ledger starts must not stretch the chart backwards. Days on which a held
+   * instrument still has no stored quote are rendered with that position
+   * contributing 0 (see `historySeries`).
    */
   async historyStart(portfolioId: string, options: { to?: Date } = {}): Promise<Date | null> {
     const to = options.to ?? this.now();
     const ledger = await this.repos.transactions.listByPortfolio(portfolioId, to);
-    const firstTransaction = ledger[0]?.timestamp ?? null;
-    if (ledger.length === 0) return firstTransaction;
-
-    const instrumentIds = [...new Set(ledger.map((transaction) => transaction.instrumentId))];
-    const instruments = await this.repos.instruments.findMany(instrumentIds);
-    const pricedInstrumentIds = instruments
-      .filter((instrument) => instrument.assetType !== "CASH")
-      .map((instrument) => instrument.instrumentId);
-    if (pricedInstrumentIds.length === 0) return firstTransaction;
-
-    const earliest = await this.repos.quotes.getEarliest(pricedInstrumentIds);
-    if (!earliest) return firstTransaction;
-    // The chart is daily, so start at the beginning of the quote's UTC day.
+    const firstTransaction = ledger[0]?.timestamp;
+    if (!firstTransaction) return null;
+    // The chart is daily, so start at the beginning of the transaction's UTC day.
     return new Date(
       Date.UTC(
-        earliest.timestamp.getUTCFullYear(),
-        earliest.timestamp.getUTCMonth(),
-        earliest.timestamp.getUTCDate(),
+        firstTransaction.getUTCFullYear(),
+        firstTransaction.getUTCMonth(),
+        firstTransaction.getUTCDate(),
       ),
     );
   }
 
-  /** FR-053: Daily (or hourly) total-value series reconstructed from history. */
+  /**
+   * FR-053: Daily (or hourly) total-value series reconstructed from history.
+   *
+   * A held instrument without a stored quote at a given point contributes 0 to
+   * that point instead of making the whole point `null`, so the chart keeps a
+   * continuous line from the portfolio's first transaction. The point still
+   * reports `UNAVAILABLE` in `dataStatus` so callers can surface the gap.
+   */
   async historySeries(
     portfolioId: string,
     options: { baseCurrency?: string; from: Date; to: Date; interval?: "hourly" | "daily" },
@@ -410,8 +408,10 @@ export class ValuationService {
           const valuation = await this.valuate(portfolioId, { baseCurrency, asOf }, context);
           return {
             asOf,
-            totalAssetValue:
-              valuation.dataStatus === "UNAVAILABLE" ? null : valuation.totalAssetValue,
+            // Missing prices are already excluded from `totalAssetValue`, which
+            // is the same as counting those positions as 0. Returning the total
+            // keeps the series continuous; `dataStatus` still flags the gap.
+            totalAssetValue: valuation.totalAssetValue,
             dataStatus: valuation.dataStatus,
           };
         }),

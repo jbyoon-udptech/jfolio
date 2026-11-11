@@ -155,8 +155,8 @@ export class DashboardService {
   /**
    * FR-053: earliest start for the aggregate `ALL` chart. The aggregate must
    * not begin later than the longest history it contains, otherwise a
-   * portfolio with older quotes would be clipped to another portfolio's first
-   * observation.
+   * portfolio with an older ledger would be clipped to another portfolio's
+   * first observation.
    */
   async historyStartForAll(
     portfolios: Portfolio[],
@@ -177,10 +177,10 @@ export class DashboardService {
   }
 
   /**
-   * FR-053: aggregate history for the `All` dashboard. A point is unavailable
-   * when any portfolio is unavailable at that time, so the total is never
-   * understated by a partial series. The per-portfolio series are returned
-   * alongside the aggregate so the UI can draw one line per portfolio.
+   * FR-053: aggregate history for the `All` dashboard. Each portfolio series
+   * counts a held instrument without a stored quote as 0 for that point, so the
+   * total is the sum of the priced assets. The per-portfolio series are
+   * returned alongside the aggregate so the UI can draw one line per portfolio.
    */
   async getHistoryForAll(
     portfolios: Portfolio[],

@@ -281,10 +281,10 @@ describe("14.3 historical data", () => {
     );
   });
 
-  it("H-006: historySeries reconstructs a past series and skips unavailable points", async () => {
+  it("H-006: historySeries counts a held asset without a quote as zero", async () => {
     const { container } = createTestContext();
     const portfolio = await createPortfolio(container, "KRW");
-    const instrument = await createInstrument(container, {
+    const priced = await createInstrument(container, {
       symbol: "AAA",
       name: "Asset A",
       assetType: "STOCK",
@@ -292,10 +292,29 @@ describe("14.3 historical data", () => {
       currency: "KRW",
       providers: [],
     });
+    const unpriced = await createInstrument(container, {
+      symbol: "BBB",
+      name: "Asset B",
+      assetType: "STOCK",
+      market: "KRX",
+      currency: "KRW",
+      providers: [],
+    });
     const day1 = iso("2026-10-11T00:00:00.000Z");
+    const day3 = iso("2026-10-13T00:00:00.000Z");
     await container.transactions.create({
       portfolioId: portfolio.portfolioId,
-      instrumentId: instrument.instrumentId,
+      instrumentId: priced.instrumentId,
+      type: "BUY",
+      timestamp: day1,
+      quantity: 5,
+      price: 100,
+      currency: "KRW",
+      fee: 0,
+    });
+    await container.transactions.create({
+      portfolioId: portfolio.portfolioId,
+      instrumentId: unpriced.instrumentId,
       type: "BUY",
       timestamp: day1,
       quantity: 10,
@@ -303,8 +322,10 @@ describe("14.3 historical data", () => {
       currency: "KRW",
       fee: 0,
     });
-    // A quote only exists from day 3 onward.
-    await storeDaily(container, instrument, 100, iso("2026-10-13T00:00:00.000Z"));
+    await storeDaily(container, priced, 100, day1);
+    await storeDaily(container, priced, 100, day3);
+    // A quote for the second asset only exists from day 3 onward.
+    await storeDaily(container, unpriced, 100, day3);
 
     const series = await container.valuation.historySeries(portfolio.portfolioId, {
       from: day1,
@@ -312,11 +333,12 @@ describe("14.3 historical data", () => {
       interval: "daily",
     });
     expect(series).toHaveLength(4);
-    // Before the first quote the point is unavailable (null), not zero.
-    expect(series[0]?.totalAssetValue).toBeNull();
+    // Before its first quote the unpriced asset contributes 0, but the point
+    // still reports that the valuation is incomplete.
+    expect(series[0]?.totalAssetValue).toBe(500);
     expect(series[0]?.dataStatus).toBe("UNAVAILABLE");
-    // From day 3 the quote resolves.
-    expect(series[2]?.totalAssetValue).toBe(1000);
+    // From day 3 both assets resolve.
+    expect(series[2]?.totalAssetValue).toBe(1500);
     expect(series[2]?.dataStatus).toBe("NORMAL");
   });
 
