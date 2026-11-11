@@ -266,7 +266,7 @@ export function TransactionRow({
 
   return (
     <tr>
-      <td className="muted">{formatDateTime(transaction.timestamp)}</td>
+      <td className="muted">{formatDateTime(transaction.timestamp, { seconds: false })}</td>
       <td>{transaction.type}</td>
       {portfolioCell}
       {instrumentCells}

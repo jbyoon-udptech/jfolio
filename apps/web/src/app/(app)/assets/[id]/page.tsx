@@ -308,7 +308,7 @@ export default async function AssetDetailPage({
             <tbody>
               {transactions.map((tx) => (
                 <tr key={tx.transactionId}>
-                  <td className="muted">{formatDateTime(tx.timestamp)}</td>
+                  <td className="muted">{formatDateTime(tx.timestamp, { seconds: false })}</td>
                   <td>{tx.type}</td>
                   <td className="num">{formatQuantity(tx.quantity)}</td>
                   <td className="num">{formatPrice(tx.price, tx.currency)}</td>
