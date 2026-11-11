@@ -1,5 +1,6 @@
 import { ALL_PORTFOLIOS_ID } from "@jfolio/shared";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import {
@@ -166,6 +167,8 @@ export default async function TransactionsPage({
           </table>
         )}
       </div>
+
+      <PageFooter />
     </>
   );
 }

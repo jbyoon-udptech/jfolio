@@ -1,6 +1,7 @@
 import { AssetForm } from "@/components/AssetForm";
 import { AssetRow } from "@/components/AssetRow";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { api, safe } from "@/lib/api";
 import { ASSET_TYPES } from "@/lib/instrument";
@@ -83,6 +84,8 @@ export default async function AssetsPage({
           </div>
         )}
       </div>
+
+      <PageFooter />
     </>
   );
 }

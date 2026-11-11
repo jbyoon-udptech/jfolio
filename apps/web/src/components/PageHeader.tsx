@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { CurrentNavLabel } from "@/components/CurrentNavLabel";
-import { FxRateBar } from "@/components/FxRateBar";
 import { MobileNavTrigger } from "@/components/MobileNavTrigger";
 import { PageHeading } from "@/components/PageHeading";
 
@@ -9,22 +8,16 @@ import { PageHeading } from "@/components/PageHeading";
  * nav label on every viewport; the label stays centered between the controls
  * and takes its own centered row on narrow viewports. The hamburger is
  * mobile-only. The descriptive heading is visually hidden for assistive
- * technology; the global FX line and optional subtitle sit below the bar.
+ * technology; the global FX line lives in `PageFooter` at the bottom instead.
  */
 export function PageHeader({
   title,
   subtitle,
-  baseCurrency,
-  referenceTime,
   selector,
   actions,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
-  /** Base currency of the page data, used for the global FX line. */
-  baseCurrency?: string;
-  /** Reference time of the page data, merged into the global FX line. */
-  referenceTime?: string | Date | null;
   /** Optional page-specific context, usually a portfolio selector. */
   selector?: ReactNode;
   /** Page-level actions shown on the right. */
@@ -40,7 +33,6 @@ export function PageHeader({
         <CurrentNavLabel />
         {actions ? <div className="page-header-actions">{actions}</div> : null}
       </div>
-      <FxRateBar baseCurrency={baseCurrency} referenceTime={referenceTime} />
       <PageHeading title={title} subtitle={subtitle} />
     </header>
   );

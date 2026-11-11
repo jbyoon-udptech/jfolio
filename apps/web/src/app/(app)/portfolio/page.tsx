@@ -1,5 +1,6 @@
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -72,8 +73,6 @@ export default async function PortfolioPage({
           </>
         }
         title="보유 자산"
-        baseCurrency={holdings.baseCurrency}
-        referenceTime={holdings.asOf}
       />
 
       <div className="grid cols-3" style={{ marginBottom: 16 }}>
@@ -129,6 +128,11 @@ export default async function PortfolioPage({
         positions={holdings.items}
         currency={holdings.baseCurrency}
         totalAssetValue={total}
+      />
+
+      <PageFooter
+        baseCurrency={holdings.baseCurrency}
+        referenceTime={holdings.asOf}
       />
     </>
   );

@@ -2,8 +2,8 @@ import { api, safe } from "@/lib/api";
 import { formatCurrency, formatDateTime, formatPrice } from "@/lib/format";
 
 /**
- * Global reference-rate line shown directly below the page header bar on every
- * authenticated page. The rate is stored FX data, never a live provider call.
+ * Global reference-rate line shown at the bottom of every authenticated page.
+ * The rate is stored FX data, never a live provider call.
  */
 export async function FxRateBar({
   baseCurrency,

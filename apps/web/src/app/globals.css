@@ -270,6 +270,22 @@ a {
   color: var(--muted);
 }
 
+/* Global reference-rate line pinned to the bottom of the page content. */
+.page-footer {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.page-footer:empty {
+  display: none;
+}
+
+.page-footer .fx-rate-bar {
+  margin: 0;
+  font-size: 11px;
+}
+
 .portfolio-select {
   display: block;
   min-width: 160px;

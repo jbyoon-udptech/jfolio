@@ -28,6 +28,16 @@ export function isConcretePortfolioId(value: string | undefined): value is strin
   return id !== undefined && id !== ALL_PORTFOLIOS_ID;
 }
 
+/**
+ * Portfolio dropdown order: ascending by label. The aggregate "all" option is
+ * rendered separately before this list, so it always stays first.
+ */
+export function sortPortfolioOptions<T extends { label: string }>(
+  options: readonly T[],
+): T[] {
+  return [...options].sort((a, b) => a.label.localeCompare(b.label));
+}
+
 export interface PortfolioSelection {
   /** Concrete portfolio ID to use, or undefined to let the API pick the default. */
   portfolioId?: string;

@@ -49,8 +49,8 @@ export function createSystemRouter(container: Container): Router {
     }),
   );
 
-  // The web shell renders this under the page header so every page shows the
-  // same reference rate and observation time for foreign-currency assets.
+  // The web shell renders this at the bottom of every page so each view shows
+  // the same reference rate and observation time for foreign-currency assets.
   router.get(
     "/fx-rate",
     asyncHandler(async (req, res) => {

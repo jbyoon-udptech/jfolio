@@ -7,6 +7,7 @@ import { AssetDailyChangeTable } from "@/components/AssetDailyChangeTable";
 import { DashboardHoldingsTable } from "@/components/DashboardHoldingsTable";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -105,8 +106,6 @@ export default async function DashboardPage({
         }
         actions={<StatusBadge status={dashboard.dataStatus} />}
         title={selection.isAll ? "종합 대시보드" : "전체 자산 대시보드"}
-        baseCurrency={currency}
-        referenceTime={dashboard.asOf}
         subtitle={
           selection.isAll ? "종합 대시보드 · 모든 포트폴리오 통합" : undefined
         }
@@ -284,6 +283,8 @@ export default async function DashboardPage({
         {dashboard.portfolioId === ALL_PORTFOLIOS_ID ? "All" : dashboard.portfolioId} ·
         미실현 수익률 {formatPercent(dashboard.unrealizedReturn)}
       </p>
+
+      <PageFooter baseCurrency={currency} referenceTime={dashboard.asOf} />
     </>
   );
 }

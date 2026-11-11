@@ -8,6 +8,7 @@ import {
   PORTFOLIO_COOKIE,
   PORTFOLIO_COOKIE_MAX_AGE,
   isConcretePortfolioId,
+  sortPortfolioOptions,
 } from "@/lib/portfolio-selection";
 
 function persistPortfolio(value: string | undefined): void {
@@ -65,7 +66,7 @@ export function PortfolioSelect({
         {allOptionLabel !== undefined ? (
           <option value={allOptionValue}>{allOptionLabel}</option>
         ) : null}
-        {portfolios.map((option) => (
+        {sortPortfolioOptions(portfolios).map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>

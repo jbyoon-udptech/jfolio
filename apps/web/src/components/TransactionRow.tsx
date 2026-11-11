@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/client-fetch";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Option } from "@/components/TransactionForm";
+import { sortPortfolioOptions } from "@/lib/portfolio-selection";
 import type { Transaction } from "@/lib/types";
 import {
   formatCurrency,
@@ -162,7 +163,7 @@ export function TransactionRow({
         onChange={(event) => setPortfolioId(event.target.value)}
         aria-label="포트폴리오"
       >
-        {portfolioOptions.map((option) => (
+        {sortPortfolioOptions(portfolioOptions).map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>

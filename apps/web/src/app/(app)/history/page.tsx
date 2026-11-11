@@ -1,6 +1,7 @@
 import { HistoryFilterForm } from "@/components/HistoryFilterForm";
 import { LineChart } from "@/components/LineChart";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioSelect } from "@/components/PortfolioSelect";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -237,6 +238,8 @@ export default async function HistoryPage({
           기준 시각 {formatDateTime(asOf?.asOf)}
         </p>
       </div>
+
+      <PageFooter baseCurrency={baseCurrency} />
     </>
   );
 }

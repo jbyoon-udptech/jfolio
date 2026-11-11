@@ -1,4 +1,5 @@
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { SignalRuleActions } from "@/components/SignalRuleActions";
 import { SignalRuleForm } from "@/components/SignalRuleForm";
@@ -144,6 +145,8 @@ export default async function SignalsPage() {
           </table>
         )}
       </div>
+
+      <PageFooter />
     </>
   );
 }

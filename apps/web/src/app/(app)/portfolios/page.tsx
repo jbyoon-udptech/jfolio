@@ -1,4 +1,5 @@
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioForm } from "@/components/PortfolioForm";
 import { PortfolioRowActions } from "@/components/PortfolioRowActions";
@@ -111,6 +112,8 @@ export default async function PortfoliosPage({
           </table>
         )}
       </div>
+
+      <PageFooter />
     </>
   );
 }

@@ -5,6 +5,7 @@ import {
   isConcretePortfolioId,
   parsePortfolioId,
   resolvePortfolioSelection,
+  sortPortfolioOptions,
 } from "@/lib/portfolio-selection";
 
 const KNOWN_IDS = ["pf_main", "pf_side"];
@@ -26,6 +27,35 @@ describe("portfolio selection cookie", () => {
     expect(isConcretePortfolioId(ALL_PORTFOLIOS_ID)).toBe(false);
     expect(isConcretePortfolioId("")).toBe(false);
     expect(isConcretePortfolioId(undefined)).toBe(false);
+  });
+});
+
+describe("sortPortfolioOptions", () => {
+  it("sorts labels ascending without mutating the input", () => {
+    const options = [
+      { value: "c", label: "Charlie" },
+      { value: "a", label: "Alpha" },
+      { value: "b", label: "Bravo" },
+    ];
+    expect(sortPortfolioOptions(options).map((option) => option.value)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(options.map((option) => option.value)).toEqual(["c", "a", "b"]);
+  });
+
+  it("orders Korean labels in dictionary order", () => {
+    const options = [
+      { value: "c", label: "다" },
+      { value: "a", label: "가" },
+      { value: "b", label: "나" },
+    ];
+    expect(sortPortfolioOptions(options).map((option) => option.value)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
   });
 });
 

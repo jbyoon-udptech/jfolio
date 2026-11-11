@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { PriceChart, type PricePoint } from "@/components/PriceChart";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -319,6 +320,8 @@ export default async function AssetDetailPage({
           </table>
         )}
       </div>
+
+      <PageFooter baseCurrency={baseCurrency} />
     </>
   );
 }

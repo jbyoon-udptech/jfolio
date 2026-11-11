@@ -1,5 +1,6 @@
 import { CollectionTrigger } from "@/components/CollectionTrigger";
 import { ApiErrorNotice } from "@/components/Notice";
+import { PageFooter } from "@/components/PageFooter";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, safe } from "@/lib/api";
@@ -188,6 +189,8 @@ export default async function MarketDataPage() {
           </div>
         )}
       </div>
+
+      <PageFooter />
     </>
   );
 }
