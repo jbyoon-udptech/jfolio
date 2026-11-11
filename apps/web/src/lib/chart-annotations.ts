@@ -25,6 +25,12 @@ export interface SeriesChartExtremeAnnotation extends ChartExtremeAnnotation {
   seriesIndex: number;
 }
 
+/** Annotation tagged with its series id so grouped searches cannot collide. */
+export interface TrendChartExtremeAnnotation
+  extends SeriesChartExtremeAnnotation {
+  seriesId: string;
+}
+
 interface Candidate {
   seriesIndex: number;
   index: number;
@@ -109,6 +115,33 @@ export function findChartExtremeAnnotations(
     value: item.value,
     changeRate: item.changeRate,
   }));
+}
+
+/**
+ * Annotate the per-portfolio group and the aggregate line separately.
+ *
+ * A single combined search would let the aggregate (always the largest value)
+ * hide every portfolio extreme, while excluding the aggregate leaves the chart
+ * without labels when only the total is visible. Grouping keeps both labels and
+ * gives each one the change rate of its own series' latest finite value.
+ */
+export function findTrendChartExtremes(
+  series: ReadonlyArray<{
+    id: string;
+    total?: boolean;
+    points: readonly ChartPoint[];
+  }>,
+): TrendChartExtremeAnnotation[] {
+  const groups = [
+    series.filter((item) => !item.total),
+    series.filter((item) => item.total === true),
+  ];
+  return groups.flatMap((group) =>
+    findSeriesChartExtremes(group).map((annotation) => ({
+      ...annotation,
+      seriesId: group[annotation.seriesIndex]?.id ?? "",
+    })),
+  );
 }
 
 export interface ValueChartPoint {

@@ -7,7 +7,7 @@ import {
   type PortfolioTrendSeries,
 } from "@/lib/dashboard";
 import type { HistoryPoint } from "@/lib/types";
-import { findSeriesChartExtremes } from "@/lib/chart-annotations";
+import { findTrendChartExtremes } from "@/lib/chart-annotations";
 import {
   formatCurrency,
   formatDate,
@@ -133,16 +133,16 @@ export function PortfolioTrendChart({
     ];
   }).flat();
 
-  // The aggregate is always the largest value, so annotating it would shadow
-  // the per-portfolio extremes. Keep the max/min labels on individual series.
-  const annotatableSeries = visibleSeries.filter((item) => !item.total);
-  const annotations = findSeriesChartExtremes(annotatableSeries).map((annotation) => {
+  // The aggregate is always the largest value, so it is annotated as its own
+  // group: searching every series at once would hide the portfolio extremes.
+  const seriesById = new Map(series.map((item) => [item.id, item]));
+  const annotations = findTrendChartExtremes(visibleSeries).map((annotation) => {
     const x = PAD + annotation.index * stepX;
     const y = valueToY(annotation.value);
     const horizontal = x < 110 ? "0" : x > WIDTH - 110 ? "-100%" : "-50%";
     const vertical =
       annotation.kind === "max" ? "10px" : "calc(-100% - 10px)";
-    const annotated = annotatableSeries[annotation.seriesIndex];
+    const annotated = seriesById.get(annotation.seriesId);
     return {
       ...annotation,
       x,
@@ -321,8 +321,8 @@ export function PortfolioTrendChart({
                 />
               ) : null}
               {segmentsBySeries.map((segments, seriesIndex) => {
-                const item = series[seriesIndex];
-                const color = seriesColorFor(item, seriesIndex);
+                const item = visibleSeries[seriesIndex];
+                const color = item ? colorOf(item) : "var(--accent)";
                 return segments.map((segment, segmentIndex) =>
                   segment.length > 1 ? (
                     <polyline
@@ -347,7 +347,7 @@ export function PortfolioTrendChart({
               })}
               {annotations.map((annotation) => (
                 <circle
-                  key={`extreme-${annotation.seriesIndex}-${annotation.kind}`}
+                  key={`extreme-${annotation.seriesId}-${annotation.kind}`}
                   cx={annotation.x}
                   cy={annotation.y}
                   r={3.5}
@@ -357,7 +357,7 @@ export function PortfolioTrendChart({
                 />
               ))}
               {activeIndex !== null
-                ? series.map((item, index) => {
+                ? visibleSeries.map((item) => {
                     const value = item.points[activeIndex]?.totalAssetValue;
                     if (
                       value === null ||
@@ -372,7 +372,7 @@ export function PortfolioTrendChart({
                         cx={active?.x}
                         cy={valueToY(value)}
                         r={3.5}
-                        fill={seriesColorFor(item, index)}
+                        fill={colorOf(item)}
                         stroke="var(--panel)"
                         strokeWidth={2}
                       />
@@ -382,7 +382,7 @@ export function PortfolioTrendChart({
             </svg>
             {annotations.map((annotation) => (
               <div
-                key={`extreme-label-${annotation.seriesIndex}-${annotation.kind}`}
+                key={`extreme-label-${annotation.seriesId}-${annotation.kind}`}
                 className="chart-annotation"
                 style={{
                   left: `${(annotation.x / WIDTH) * 100}%`,

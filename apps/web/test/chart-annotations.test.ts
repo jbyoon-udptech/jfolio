@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findChartExtremeAnnotations,
   findSeriesChartExtremes,
+  findTrendChartExtremes,
   findValueChartExtremeAnnotations,
 } from "@/lib/chart-annotations";
 import type { ChartPoint } from "@/lib/chart-annotations";
@@ -87,5 +88,60 @@ describe("chart extreme annotations", () => {
       value: 400,
       changeRate: 25,
     });
+  });
+});
+
+describe("findTrendChartExtremes", () => {
+  const portfolioPoints: ChartPoint[] = [
+    { asOf: "2026-10-01T00:00:00.000Z", totalAssetValue: 100 },
+    { asOf: "2026-10-02T00:00:00.000Z", totalAssetValue: 200 },
+    { asOf: "2026-10-03T00:00:00.000Z", totalAssetValue: 150 },
+  ];
+  const totalPoints: ChartPoint[] = [
+    { asOf: "2026-10-01T00:00:00.000Z", totalAssetValue: 300 },
+    { asOf: "2026-10-02T00:00:00.000Z", totalAssetValue: 400 },
+    { asOf: "2026-10-03T00:00:00.000Z", totalAssetValue: 350 },
+  ];
+
+  it("annotates the aggregate line separately from the portfolio extremes", () => {
+    const annotations = findTrendChartExtremes([
+      { id: "pf_a", points: portfolioPoints },
+      { id: "__total__", total: true, points: totalPoints },
+    ]);
+
+    expect(annotations.map(({ seriesId, kind }) => `${seriesId}:${kind}`)).toEqual(
+      ["pf_a:max", "pf_a:min", "__total__:max", "__total__:min"],
+    );
+  });
+
+  it("measures each group against its own latest finite value", () => {
+    const annotations = findTrendChartExtremes([
+      { id: "pf_a", points: portfolioPoints },
+      { id: "__total__", total: true, points: totalPoints },
+    ]);
+
+    expect(annotations[0]).toMatchObject({ value: 200, changeRate: -25 });
+    expect(annotations[1]).toMatchObject({ value: 100, changeRate: 50 });
+    expect(annotations[2]).toMatchObject({ value: 400 });
+    expect(annotations[2]?.changeRate).toBeCloseTo(-12.5);
+    expect(annotations[3]).toMatchObject({ value: 300 });
+    expect(annotations[3]?.changeRate).toBeCloseTo(100 / 6);
+  });
+
+  it("annotates the total when it is the only visible series", () => {
+    const annotations = findTrendChartExtremes([
+      { id: "__total__", total: true, points: totalPoints },
+    ]);
+
+    expect(annotations).toHaveLength(2);
+    expect(annotations.every((item) => item.seriesId === "__total__")).toBe(true);
+  });
+
+  it("skips a group whose series have no usable shape", () => {
+    expect(
+      findTrendChartExtremes([
+        { id: "__total__", total: true, points: [totalPoints[0]!] },
+      ]),
+    ).toEqual([]);
   });
 });
