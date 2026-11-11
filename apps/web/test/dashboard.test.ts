@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   TOTAL_TREND_SERIES_LABEL,
   toPortfolioTrendSeries,
+  toggleSeriesVisibility,
+  visibleTrendSeries,
   withTotalTrendSeries,
 } from "@/lib/dashboard";
 import type { HistoryPoint } from "@/lib/types";
@@ -98,5 +100,63 @@ describe("withTotalTrendSeries", () => {
     expect(withTotalTrendSeries(portfolioSeries, undefined)).toEqual(
       toPortfolioTrendSeries(portfolioSeries),
     );
+  });
+});
+
+describe("visibleTrendSeries", () => {
+  const series = [
+    { id: "pf_first", label: "First", points },
+    { id: "pf_second", label: "Second", points: [] },
+  ];
+
+  it("returns every series when nothing is hidden", () => {
+    expect(visibleTrendSeries(series, new Set())).toEqual(series);
+  });
+
+  it("drops only the hidden ids and keeps the original order", () => {
+    expect(visibleTrendSeries(series, new Set(["pf_first"]))).toEqual([
+      series[1],
+    ]);
+  });
+
+  it("can hide the aggregate series like any other", () => {
+    const withTotal = withTotalTrendSeries(
+      [{ portfolioId: "pf_first", name: "First", items: points }],
+      points,
+    );
+    const total = withTotal.find((item) => item.total);
+    expect(total).toBeDefined();
+    expect(
+      visibleTrendSeries(withTotal, new Set([total?.id ?? ""])).some(
+        (item) => item.total,
+      ),
+    ).toBe(false);
+  });
+
+  it("returns an empty list when every series is hidden", () => {
+    const hidden = new Set(["pf_first", "pf_second"]);
+    expect(visibleTrendSeries(series, hidden)).toEqual([]);
+  });
+});
+
+describe("toggleSeriesVisibility", () => {
+  it("adds an id that is currently visible", () => {
+    expect([...toggleSeriesVisibility(new Set(), "pf_first")]).toEqual([
+      "pf_first",
+    ]);
+  });
+
+  it("removes an id that is currently hidden", () => {
+    const next = toggleSeriesVisibility(new Set(["pf_first"]), "pf_first");
+    expect([...next]).toEqual([]);
+  });
+
+  it("toggles only the requested id and leaves the input set untouched", () => {
+    const hidden = new Set(["pf_first"]);
+    const next = toggleSeriesVisibility(hidden, "pf_second");
+
+    expect([...next].sort()).toEqual(["pf_first", "pf_second"]);
+    expect([...hidden]).toEqual(["pf_first"]);
+    expect(next).not.toBe(hidden);
   });
 });

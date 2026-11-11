@@ -46,3 +46,22 @@ export function withTotalTrendSeries(
     },
   ];
 }
+
+/** Series currently drawn, i.e. everything the legend has not switched off. */
+export function visibleTrendSeries(
+  series: readonly PortfolioTrendSeries[],
+  hiddenIds: ReadonlySet<string>,
+): PortfolioTrendSeries[] {
+  return series.filter((item) => !hiddenIds.has(item.id));
+}
+
+/** Toggle one legend entry without mutating the previous set. */
+export function toggleSeriesVisibility(
+  hiddenIds: ReadonlySet<string>,
+  id: string,
+): Set<string> {
+  const next = new Set(hiddenIds);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}

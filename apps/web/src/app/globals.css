@@ -1159,6 +1159,44 @@ button.pill {
   border-radius: 2px;
 }
 
+/* Legend entries double as series toggles, including the aggregate line. */
+button.chart-legend-item,
+.chart-legend-reset {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.chart-legend-item:hover,
+.chart-legend-reset:hover {
+  border: 0;
+  text-decoration: underline;
+}
+
+button.chart-legend-item:focus-visible,
+.chart-legend-reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chart-legend-item.hidden {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.chart-legend-item.hidden .chart-legend-swatch {
+  background: transparent;
+  border: 1px solid var(--muted);
+}
+
+.chart-legend-reset {
+  color: var(--accent);
+}
+
 .chart-tooltip-wide {
   min-width: 190px;
   max-width: 280px;

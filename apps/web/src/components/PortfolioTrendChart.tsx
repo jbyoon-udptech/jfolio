@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { PortfolioTrendSeries } from "@/lib/dashboard";
+import {
+  toggleSeriesVisibility,
+  visibleTrendSeries,
+  type PortfolioTrendSeries,
+} from "@/lib/dashboard";
 import type { HistoryPoint } from "@/lib/types";
 import { findSeriesChartExtremes } from "@/lib/chart-annotations";
 import {
@@ -66,20 +70,31 @@ export function PortfolioTrendChart({
   interval?: "hourly" | "daily";
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const referencePoints = series.reduce<HistoryPoint[]>(
-    (longest, item) => (item.points.length > longest.length ? item.points : longest),
-    [],
-  );
-  const finite = series
-    .flatMap((item) => item.points.map((point) => point.totalAssetValue))
-    .filter((value): value is number => value !== null && Number.isFinite(value));
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => new Set());
 
-  if (referencePoints.length === 0 || finite.length === 0) {
+  if (series.length === 0) {
     return <div className="empty">표시할 데이터가 없습니다. (평가 불가 구간)</div>;
   }
 
-  const min = Math.min(...finite);
-  const max = Math.max(...finite);
+  const visibleSeries = visibleTrendSeries(series, hiddenIds);
+  // Colors stay stable when a legend toggle removes a series.
+  const colorById = new Map(
+    series.map((item, index) => [item.id, seriesColorFor(item, index)]),
+  );
+  const colorOf = (item: PortfolioTrendSeries) =>
+    colorById.get(item.id) ?? "var(--accent)";
+
+  const referencePoints = visibleSeries.reduce<HistoryPoint[]>(
+    (longest, item) => (item.points.length > longest.length ? item.points : longest),
+    [],
+  );
+  const finite = visibleSeries
+    .flatMap((item) => item.points.map((point) => point.totalAssetValue))
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+
+  const hasData = referencePoints.length > 0 && finite.length > 0;
+  const min = hasData ? Math.min(...finite) : 0;
+  const max = hasData ? Math.max(...finite) : 0;
   const valueRange = max - min || Math.max(Math.abs(max), 1) * 0.01;
   const stepX =
     referencePoints.length > 1
@@ -120,7 +135,7 @@ export function PortfolioTrendChart({
 
   // The aggregate is always the largest value, so annotating it would shadow
   // the per-portfolio extremes. Keep the max/min labels on individual series.
-  const annotatableSeries = series.filter((item) => !item.total);
+  const annotatableSeries = visibleSeries.filter((item) => !item.total);
   const annotations = findSeriesChartExtremes(annotatableSeries).map((annotation) => {
     const x = PAD + annotation.index * stepX;
     const y = valueToY(annotation.value);
@@ -134,12 +149,12 @@ export function PortfolioTrendChart({
       y,
       transform: `translate(${horizontal}, ${vertical})`,
       tone: changeClass(annotation.changeRate),
-      color: seriesColorFor(annotated, annotation.seriesIndex),
+      color: annotated ? colorOf(annotated) : "var(--accent)",
       label: annotated?.label ?? "",
     };
   });
 
-  const segmentsBySeries = series.map((item) => {
+  const segmentsBySeries = visibleSeries.map((item) => {
     const segments: Array<Array<{ x: number; y: number }>> = [];
     let current: Array<{ x: number; y: number }> = [];
     item.points.forEach((point, index) => {
@@ -158,12 +173,12 @@ export function PortfolioTrendChart({
   const activeRows =
     activeIndex === null
       ? []
-      : series.map((item, index) => {
+      : visibleSeries.map((item) => {
           const value = item.points[activeIndex]?.totalAssetValue;
           return {
             id: item.id,
             label: item.label,
-            color: seriesColorFor(item, index),
+            color: colorOf(item),
             total: item.total === true,
             value:
               value !== null && value !== undefined && Number.isFinite(value)
@@ -203,7 +218,7 @@ export function PortfolioTrendChart({
     const viewBoxX = ((event.clientX - rect.left) / rect.width) * WIDTH;
     const rawIndex = stepX > 0 ? Math.round((viewBoxX - PAD) / stepX) : 0;
     const index = Math.max(0, Math.min(referencePoints.length - 1, rawIndex));
-    const hasValue = series.some((item) => {
+    const hasValue = visibleSeries.some((item) => {
       const value = item.points[index]?.totalAssetValue;
       return value !== null && value !== undefined && Number.isFinite(value);
     });
@@ -216,22 +231,43 @@ export function PortfolioTrendChart({
 
   return (
     <div>
-      <div className="chart-legend">
-        {series.map((item, index) => (
-          <span
-            className={`chart-legend-item${item.total ? " total" : ""}`}
-            key={item.id}
+      <div className="chart-legend" role="group" aria-label="차트 시리즈 선택">
+        {series.map((item) => {
+          const hidden = hiddenIds.has(item.id);
+          return (
+            <button
+              type="button"
+              className={`chart-legend-item${item.total ? " total" : ""}${
+                hidden ? " hidden" : ""
+              }`}
+              key={item.id}
+              aria-pressed={!hidden}
+              title={hidden ? `${item.label} 표시` : `${item.label} 숨기기`}
+              onClick={() =>
+                setHiddenIds((current) => toggleSeriesVisibility(current, item.id))
+              }
+            >
+              <span
+                className="chart-legend-swatch"
+                style={hidden ? undefined : { background: colorOf(item) }}
+                aria-hidden="true"
+              />
+              {item.label}
+            </button>
+          );
+        })}
+        {hiddenIds.size > 0 ? (
+          <button
+            type="button"
+            className="chart-legend-reset"
+            onClick={() => setHiddenIds(new Set())}
           >
-            <span
-              className="chart-legend-swatch"
-              style={{ background: seriesColorFor(item, index) }}
-              aria-hidden="true"
-            />
-            {item.label}
-          </span>
-        ))}
+            모두 보기
+          </button>
+        ) : null}
       </div>
-      <div className="chart-with-axis">
+      {hasData ? (
+        <div className="chart-with-axis">
         <div className="chart-y-axis" style={{ height }} aria-hidden="true">
           {ticks.map((tick) => (
             <span key={tick.fraction} className="chart-y-tick" style={{ top: tick.y }}>
@@ -410,6 +446,13 @@ export function PortfolioTrendChart({
           </div>
         </div>
       </div>
+      ) : (
+        <div className="empty">
+          {visibleSeries.length === 0
+            ? "선택된 시리즈가 없습니다. 범례를 눌러 다시 표시하세요."
+            : "표시할 데이터가 없습니다. (평가 불가 구간)"}
+        </div>
+      )}
     </div>
   );
 }
